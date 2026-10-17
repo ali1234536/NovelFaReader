@@ -123,7 +123,7 @@ namespace EpubReader.Services
 
     public static class CharacterThemes
     {
-        // به ترتیب رتبه: سوبارو (باز از همون اول) تا امیلیا (بالاترین رتبه)
+        // به ترتیب رتبه: سوبارو (باز از همون اول) تا سوبارو · شکم‌پرستی (بالاترین رتبه)
         public static readonly CharacterTheme[] All = new CharacterTheme[]
         {
             new CharacterTheme(
@@ -164,14 +164,14 @@ namespace EpubReader.Services
             new CharacterTheme(
                 "echidna", "اکیدنا", "اکیدنا، جادوگرِ طمع",
                 "سبزِ زهرآگین و چایِ نیمه‌شب؛ طمعِ سیری‌ناپذیر برای دانستن",
-                "leaves", 99,
+                "leaves", 5,
                 ThemePalette.Parse("#040A07 #08120D #0E1D15 #E6FFEF #7FB095 #14301F #1B4A2E #0F2A1B #0F3A22 #06120B #2CFF8A #12C968 #7CFFB5 #0FA85A #2CFF8A #00E5C0"),
                 ThemePalette.Parse("#F0FAF4 #FFFFFF #FFFFFF #0B2417 #5B8068 #E2F5EA #C6E6D2 #D8F5E3 #D2F4E0 #BDEBD2 #0B8F4A #076B37 #3DDB86 #0B8F4A #1FD174 #00BFA0"),
                 "F1 M24,46 L76,46 C76,68 66,80 50,80 C34,80 24,68 24,46 Z M76,50 C90,50 92,68 74,70 L73,65 C83,64 83,55 75,55 Z M14,86 C14,83 30,81 50,81 C70,81 86,83 86,86 C86,90 70,92 50,92 C30,92 14,90 14,86 Z M38,40 C32,33 42,28 38,19 L41.5,18 C46,28 36,33 41.5,39 Z M50,38 C44,30 55,24 50,13 L53.5,12 C58.5,24 47,30 53.5,37 Z M62,40 C56,33 66,28 62,19 L65.5,18 C70,28 60,33 65.5,39 Z M84,6 L86.2,11.6 L92,14 L86.2,16.4 L84,22 L81.8,16.4 L76,14 L81.8,11.6 Z"),
             new CharacterTheme(
                 "tsugi", "سوبارو · شکم\u200cپرستی", "ناتسوکی سوبارو، نسخه\u200cی شکم\u200cپرستی",
                 "خاکستر، کتاب مردگان و خاطره\u200cای که تکه\u200cتکه دوخته می\u200cشه",
-                "ash", 99,
+                "ash", 6,
                 ThemePalette.Parse("#141415 #19191A #1E1E20 #F1EBE6 #9A8C80 #262325 #3B3432 #2A2422 #28262B #151416 #E3B46E #C8934A #EBC585 #D39A4E #A39286 #7C6068"),
                 ThemePalette.Parse("#F5F0EE #FBF8F6 #FDFAF8 #2E2429 #7C6368 #EDE3E0 #E2C9C0 #F3E4DC #EBD9D3 #D9C2C0 #A9732B #85561A #E3B46E #C28A3E #A78A89 #C0392F"),
                 "F0 M12,68 L88,68 L88,84 L12,84 Z M18,72 L82,72 L82,80 L18,80 Z M20,48 L92,48 L92,64 L20,64 Z M26,52 L86,52 L86,60 L26,60 Z M8,28 L80,28 L80,44 L8,44 Z M14,32 L74,32 L74,40 L14,40 Z M50,10 L58,10 L58,24 L54,20 L50,24 Z")

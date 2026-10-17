@@ -121,6 +121,7 @@
     <Compile Include="CardMotion.cs" />
     <Compile Include="CharacterThemeWindow.cs" />
     <Compile Include="ThemeParticles.cs" />
+    <Compile Include="MouseFx.cs" />
     <Compile Include="CollectionBookItem.cs" />
     <Compile Include="DarkMessageBox.cs" />
     <Compile Include="Models\Book.cs" />
@@ -138,6 +139,8 @@
     <Compile Include="Services\EpubParser.cs" />
     <Compile Include="Services\LibraryService.cs" />
     <Compile Include="Services\ProfileService.cs" />
+    <Compile Include="Services\CollectionRegistry.cs" />
+    <Compile Include="NameInputWindow.cs" />
     <Compile Include="Services\SettingsService.cs" />
     <Compile Include="Services\SimpleJson.cs" />
     <Compile Include="Services\ThemeManager.cs" />

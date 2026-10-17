@@ -23,6 +23,8 @@ public sealed class CharacterThemeWindow : Window
 	private DispatcherTimer toastTimer;
 	private Button particlesButton;
 
+	private Button mouseButton;
+
 	public static void ShowFor(Window owner, int doneBooks, Action onChanged)
 	{
 		CharacterThemeWindow win = new CharacterThemeWindow(doneBooks, onChanged);
@@ -277,6 +279,19 @@ public sealed class CharacterThemeWindow : Window
 		buttons.Children.Add(particlesButton);
 		UpdateParticlesButton();
 
+		mouseButton = new Button();
+		mouseButton.Style = soft;
+		mouseButton.Margin = new Thickness(8.0, 0.0, 0.0, 0.0);
+		mouseButton.ToolTip = Loc.T("نشانگر موس و رد دنباله‌دار به رنگ و نشان تم شخصیت");
+		mouseButton.Click += (object s, RoutedEventArgs e) =>
+		{
+			MouseFx.Mode = (MouseFx.Mode + 1) % 3;
+			MouseFx.Refresh();
+			UpdateMouseButton();
+		};
+		buttons.Children.Add(mouseButton);
+		UpdateMouseButton();
+
 		footer.Children.Add(buttons);
 		return footer;
 	}
@@ -284,6 +299,12 @@ public sealed class CharacterThemeWindow : Window
 	private void UpdateParticlesButton()
 	{
 		particlesButton.Content = Loc.T(ThemeParticleLayer.Enabled ? "ذرات متحرک: روشن" : "ذرات متحرک: خاموش");
+	}
+
+	private void UpdateMouseButton()
+	{
+		int mode = MouseFx.Mode;
+		mouseButton.Content = Loc.T(mode == MouseFx.ModeOff ? "موس: ساده" : (mode == MouseFx.ModeCursor ? "موس: نشانگر تم" : "موس: نشانگر + رد دنباله"));
 	}
 
 	private void NotifyChanged()

@@ -34,7 +34,9 @@ namespace EpubReader.Services
             new RankInfo(1, "کتاب‌باز", 1),
             new RankInfo(2, "کتاب‌خور", 3),
             new RankInfo(3, "کتابدار", 10),
-            new RankInfo(4, "افسانه‌ی کتابخانه", 25)
+            new RankInfo(4, "افسانه‌ی کتابخانه", 25),
+            new RankInfo(5, "دانای پلایادس", 60),
+            new RankInfo(6, "هیولای پلایادس", 80)
         };
 
         public static int RankIndexFor(int done)

@@ -261,6 +261,7 @@ public static class LibraryService
 
 	public static void RenameCollection(string oldName, string newName)
 	{
+		CollectionRegistry.Rename(oldName, newName);
 		List<Book> books = LoadBooks();
 		bool changed = false;
 		foreach (Book b in books.Where((Book book) => book.CollectionName == oldName))
@@ -277,9 +278,35 @@ public static class LibraryService
 	public static List<string> GetAllCollectionNames()
 	{
 		List<Book> books = LoadBooks();
-		return (from b in books
+		List<string> names = (from b in books
 			where !string.IsNullOrEmpty(b.CollectionName)
 			select b.CollectionName).Distinct().ToList();
+		// مجموعه‌هایی که دستی ساخته شدن و هنوز خالین هم باید برای انتخاب دیده بشن
+		foreach (string n in CollectionRegistry.Load())
+		{
+			if (!names.Contains(n, StringComparer.OrdinalIgnoreCase))
+			{
+				names.Add(n);
+			}
+		}
+		return names;
+	}
+
+	// مجموعه رو حذف می‌کنه؛ کتاب‌ها می‌مونن و فقط از مجموعه بیرون میان
+	public static void DeleteCollection(string name)
+	{
+		CollectionRegistry.Remove(name);
+		List<Book> books = LoadBooks();
+		bool changed = false;
+		foreach (Book b in books.Where((Book book) => string.Equals(book.CollectionName, name, StringComparison.OrdinalIgnoreCase)))
+		{
+			b.CollectionName = "";
+			changed = true;
+		}
+		if (changed)
+		{
+			SaveBooks(books);
+		}
 	}
 
 	public static void CleanupUnusedCovers()

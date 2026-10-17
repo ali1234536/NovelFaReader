@@ -27,6 +27,7 @@
             <PathGeometry x:Key="ThemeEmblem" />
             <Visibility x:Key="ThemeArtVisibility">Collapsed</Visibility>
             <Visibility x:Key="ThemeStitchVisibility">Collapsed</Visibility>
+            <Visibility x:Key="ThemeBiteVisibility">Collapsed</Visibility>
             <SolidColorBrush x:Key="ThemeAuraA" Color="#00000000" />
             <SolidColorBrush x:Key="ThemeAuraB" Color="#00000000" />
             <PathGeometry x:Key="IcoMinimize" Figures="M3,8 H13" />

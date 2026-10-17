@@ -271,6 +271,8 @@ namespace EpubReader.Services
             ["کتابخور"] = "Avid reader",
             ["کتابدار"] = "Librarian",
             ["افسانهی کتابخانه"] = "Library legend",
+            ["دانای پلایادس"] = "Sage of Pleiades",
+            ["هیولای پلایادس"] = "Monster of Pleiades",
             ["فایل فونت پیدا نشد."] = "The font file wasn't found.",
             ["فقط فایلهای ttf و otf پشتیبانی میشن."] = "Only ttf and otf files are supported.",
             ["اسم فونت نمیتونه خالی باشه."] = "The font name can't be empty.",

@@ -649,6 +649,18 @@ namespace EpubReader
             {
                 return;
             }
+            if (collectionsPanel != null && booksScroll != null)
+            {
+                bool collectionsTab = currentTab == "collections";
+                collectionsPanel.Visibility = collectionsTab ? Visibility.Visible : Visibility.Collapsed;
+                booksScroll.Visibility = collectionsTab ? Visibility.Collapsed : Visibility.Visible;
+                if (collectionsTab)
+                {
+                    RefreshCollectionsPanel();
+                    return;
+                }
+                UpdateCollectionsCount();
+            }
             IEnumerable<Book> filteredBooks = books;
             if (currentTab == "private")
             {
@@ -807,6 +819,7 @@ namespace EpubReader
             SetTabAppearance(btnTabReading, "reading", selectedBrush, normalBrush, selectedText, normalText);
             SetTabAppearance(btnTabCompleted, "completed", selectedBrush, normalBrush, selectedText, normalText);
             SetTabAppearance(btnTabRecent, "recent", selectedBrush, normalBrush, selectedText, normalText);
+            SetTabAppearance(btnTabCollections, "collections", selectedBrush, normalBrush, selectedText, normalText);
             SetTabAppearance(btnTabPrivate, "private", selectedBrush, normalBrush, selectedText, normalText);
         }
 
@@ -918,6 +931,172 @@ namespace EpubReader
                 prewarmedReader = null;
             }
             Dispatcher.BeginInvoke(new Action(PrewarmReaderWindow), DispatcherPriority.ApplicationIdle);
+        }
+
+        // ---------- مجموعه‌ها: ساختن دستی مجموعه با اسم دلخواه و گذاشتن EPUB توش ----------
+        private List<CollectionRow> BuildCollectionRows(bool applySearch)
+        {
+            string query = (applySearch && txtSearch != null && txtSearch.Text != null) ? txtSearch.Text.Trim() : "";
+            Dictionary<string, int> counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (string name in CollectionRegistry.Load())
+            {
+                counts[name] = 0;
+            }
+            foreach (Book b in books)
+            {
+                if (string.IsNullOrEmpty(b.CollectionName))
+                {
+                    continue;
+                }
+                int n;
+                counts.TryGetValue(b.CollectionName, out n);
+                counts[b.CollectionName] = n + ((!b.IsPrivate || PrivateUnlockedThisSession) ? 1 : 0);
+            }
+            List<CollectionRow> rows = new List<CollectionRow>();
+            foreach (KeyValuePair<string, int> kv in counts)
+            {
+                if (query.Length > 0 && kv.Key.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+                rows.Add(new CollectionRow { Name = kv.Key, Count = kv.Value });
+            }
+            rows.Sort((CollectionRow x, CollectionRow y) => NaturalStringComparer.Instance.Compare(x.Name, y.Name));
+            return rows;
+        }
+
+        private void UpdateCollectionsCount()
+        {
+            if (txtCollectionsCount == null)
+            {
+                return;
+            }
+            int n = BuildCollectionRows(false).Count;
+            txtCollectionsCount.Text = n > 0 ? n.ToString() : "";
+        }
+
+        private void RefreshCollectionsPanel()
+        {
+            List<CollectionRow> rows = BuildCollectionRows(true);
+            collectionList.ItemsSource = null;
+            collectionList.ItemsSource = rows;
+            txtCollectionsEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            txtCollectionsTotal.Text = rows.Count > 0 ? Loc.FN("{0} مجموعه", rows.Count, rows.Count) : "";
+            UpdateCollectionsCount();
+        }
+
+        // پیام خطا برای اسم نامعتبر، یا null اگه اسم درسته. keepName اسمیه که مجاز به تکرارشه (موقع تغییر نام)
+        private string ValidateCollectionName(string name, string keepName)
+        {
+            string t = (name ?? "").Trim();
+            if (t.Length == 0)
+            {
+                return Loc.T("اسم مجموعه نمی‌تونه خالی باشه.");
+            }
+            if (t.Length > 60)
+            {
+                return Loc.T("اسم مجموعه خیلی طولانیه (حداکثر ۶۰ حرف).");
+            }
+            if (keepName != null && string.Equals(t, keepName, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+            foreach (CollectionRow r in BuildCollectionRows(false))
+            {
+                if (string.Equals(r.Name, t, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Loc.T("یه مجموعه با این اسم از قبل هست.");
+                }
+            }
+            return null;
+        }
+
+        private void btnCollectionNew_Click(object sender, RoutedEventArgs e)
+        {
+            string name = NameInputWindow.Ask(this, "مجموعه‌ی جدید", "اسم مجموعه رو بنویس:", "", (string n) => ValidateCollectionName(n, null));
+            if (name == null)
+            {
+                return;
+            }
+            CollectionRegistry.Add(name);
+            RefreshCollectionsPanel();
+            MessageBoxResult answer = DarkMessageBox.Show(Loc.F("مجموعه‌ی «{0}» ساخته شد.\nهمین الان فایل‌های EPUB رو بهش اضافه کنم؟", name), Loc.T("مجموعه‌ها"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Yes)
+            {
+                AddFilesToCollection(name);
+            }
+        }
+
+        private void AddFilesToCollection(string collectionName)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = Loc.T("فایل‌های EPUB (*.epub)") + "|*.epub",
+                Title = Loc.T("انتخاب فایل‌های EPUB برای این مجموعه"),
+                Multiselect = true
+            };
+            if (ofd.ShowDialog() != true)
+            {
+                return;
+            }
+            AddEpubFiles(ofd.FileNames, collectionName);
+        }
+
+        private static CollectionRow RowOf(object sender)
+        {
+            FrameworkElement el = sender as FrameworkElement;
+            return (el != null) ? el.DataContext as CollectionRow : null;
+        }
+
+        private void CollectionAdd_Click(object sender, RoutedEventArgs e)
+        {
+            CollectionRow row = RowOf(sender);
+            if (row != null)
+            {
+                AddFilesToCollection(row.Name);
+            }
+        }
+
+        private void CollectionOpen_Click(object sender, RoutedEventArgs e)
+        {
+            CollectionRow row = RowOf(sender);
+            if (row != null)
+            {
+                OpenCollection(row.Name);
+            }
+        }
+
+        private void CollectionRename_Click(object sender, RoutedEventArgs e)
+        {
+            CollectionRow row = RowOf(sender);
+            if (row == null)
+            {
+                return;
+            }
+            string oldName = row.Name;
+            string newName = NameInputWindow.Ask(this, "تغییر نام مجموعه", "اسم تازه رو بنویس:", oldName, (string n) => ValidateCollectionName(n, oldName));
+            if (newName == null || newName == oldName)
+            {
+                return;
+            }
+            LibraryService.RenameCollection(oldName, newName);
+            ApplyFilterAnimated(true);
+        }
+
+        private void CollectionDelete_Click(object sender, RoutedEventArgs e)
+        {
+            CollectionRow row = RowOf(sender);
+            if (row == null)
+            {
+                return;
+            }
+            MessageBoxResult answer = DarkMessageBox.Show(Loc.F("مجموعه‌ی «{0}» حذف بشه؟\n(کتاب‌ها توی کتابخونه می‌مونن و فایل‌های EPUB پاک نمی‌شن)", row.Name), Loc.T("حذف مجموعه"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes)
+            {
+                return;
+            }
+            LibraryService.DeleteCollection(row.Name);
+            ApplyFilterAnimated(true);
         }
 
         // ---------- ترفندهای مخفی کتابخانه (پشت صحنه) ----------
@@ -1560,7 +1739,7 @@ namespace EpubReader
             return book;
         }
 
-        private async void AddEpubFiles(IEnumerable<string> inputs)
+        private async void AddEpubFiles(IEnumerable<string> inputs, string targetCollection = null)
         {
             if (isAddingBooks)
             {
@@ -1591,7 +1770,16 @@ namespace EpubReader
                 {
                     if (existing.Contains(f))
                     {
-                        duplicates++;
+                        if (!string.IsNullOrEmpty(targetCollection))
+                        {
+                            // کتابی که از قبل توی کتابخونه بود فقط به مجموعه منتقل می‌شه
+                            LibraryService.SetCollection(f, targetCollection);
+                            added++;
+                        }
+                        else
+                        {
+                            duplicates++;
+                        }
                     }
                     else
                     {
@@ -1605,6 +1793,10 @@ namespace EpubReader
                     try
                     {
                         Book imported = await Task.Run(() => ImportEpub(path));
+                        if (!string.IsNullOrEmpty(targetCollection))
+                        {
+                            imported.CollectionName = targetCollection;
+                        }
                         LibraryService.AddOrUpdateBook(imported);
                         added++;
                     }
@@ -1623,7 +1815,7 @@ namespace EpubReader
 
             if (added > 0)
             {
-                if (currentTab != "all")
+                if (currentTab != "all" && currentTab != "collections")
                 {
                     currentTab = "all";
                     UpdateTabStyles();

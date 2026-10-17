@@ -164,7 +164,7 @@ public sealed class ThemeParticleLayer : Canvas
 	private static DoubleAnimation Anim(double from, double to, double seconds)
 	{
 		DoubleAnimation a = new DoubleAnimation(from, to, TimeSpan.FromSeconds(seconds));
-		Timeline.SetDesiredFrameRate(a, 30);
+		Timeline.SetDesiredFrameRate(a, PerfHint.LowEnd ? 20 : 30);
 		return a;
 	}
 
@@ -212,6 +212,11 @@ public sealed class ThemeParticleLayer : Canvas
 		if (light)
 		{
 			peak = peak * 0.8;
+		}
+		if (PerfHint.LowEnd)
+		{
+			// سیستم ضعیف: نصف ذرات
+			count = Math.Max(4, count / 2);
 		}
 
 		double w = ActualWidth;
@@ -276,7 +281,10 @@ public sealed class ThemeParticleLayer : Canvas
 			el.RenderTransformOrigin = new Point(0.5, 0.5);
 			el.RenderTransform = group;
 			el.Opacity = 0.0;
-			el.CacheMode = new BitmapCache();
+			if (!PerfHint.LowEnd)
+			{
+				el.CacheMode = new BitmapCache();
+			}
 			el.IsHitTestVisible = false;
 
 			SetLeft(el, Rand(0.0, w));
@@ -299,7 +307,7 @@ public sealed class ThemeParticleLayer : Canvas
 			fade.Duration = TimeSpan.FromSeconds(dur);
 			fade.RepeatBehavior = RepeatBehavior.Forever;
 			fade.BeginTime = TimeSpan.FromSeconds(delay);
-			Timeline.SetDesiredFrameRate(fade, 30);
+			Timeline.SetDesiredFrameRate(fade, PerfHint.LowEnd ? 20 : 30);
 			el.BeginAnimation(UIElement.OpacityProperty, fade);
 
 			// تاب خوردن به چپ و راست

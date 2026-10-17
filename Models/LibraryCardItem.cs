@@ -83,6 +83,9 @@ public class LibraryCardItem
 
 	public bool IsCompleted { get; set; }
 
+	// گاز روی جلدِ کتاب‌های تمام‌شده (فقط توی تم شکم‌پرستی دیده می‌شه؛ کتاب تکی، نه مجموعه)
+	public Visibility BiteVisibility => (!IsCollection && IsCompleted) ? Visibility.Visible : Visibility.Collapsed;
+
 	public bool IsFavorite { get; set; }
 
 	public Visibility FavoriteVisibility => IsFavorite ? Visibility.Visible : Visibility.Collapsed;

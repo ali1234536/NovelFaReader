@@ -15,7 +15,20 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="56" Height="80" CornerRadius="9" ClipToBounds="True" Background="{DynamicResource AccentSoft}">
-                            <Image Stretch="UniformToFill" Source="{Binding CoverImage}" />
+                            <Grid>
+                                <Image Stretch="UniformToFill" Source="{Binding CoverImage}" />
+                                <Grid Visibility="{DynamicResource ThemeBiteVisibility}" IsHitTestVisible="False">
+                                    <Path Visibility="{Binding BiteVisibility}" Fill="{DynamicResource BgCard}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="26" Height="26" Margin="-6,-6,0,0" IsHitTestVisible="False">
+                                        <Path.Data>
+                                            <GeometryGroup FillRule="Nonzero">
+                                                <EllipseGeometry Center="12,12" RadiusX="10" RadiusY="10" />
+                                                <EllipseGeometry Center="21,15" RadiusX="4.5" RadiusY="4.5" />
+                                                <EllipseGeometry Center="15,21" RadiusX="4.5" RadiusY="4.5" />
+                                            </GeometryGroup>
+                                        </Path.Data>
+                                    </Path>
+                                </Grid>
+                            </Grid>
                         </Border>
                         <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center">
                             <TextBlock Foreground="{DynamicResource TextColor}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="{Binding Title}" />
@@ -128,6 +141,13 @@
                             <StackPanel Orientation="Horizontal">
                                 <Path Style="{StaticResource Ico}" Data="{StaticResource IcoClock}" />
                                 <TextBlock Text="اخیراً بازشده" Margin="12,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Name="btnTabCollections" Tag="collections" Style="{StaticResource NavButton}" Click="TabButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource Ico}" Data="{StaticResource IcoAll}" />
+                                <TextBlock Text="مجموعه‌ها" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                <TextBlock Name="txtCollectionsCount" Text="" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentColor}" />
                             </StackPanel>
                         </Button>
                         <TextBlock Text="حریم خصوصی" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="8,24,0,8" />
@@ -261,7 +281,7 @@
                     </Button>
                 </StackPanel>
             </DockPanel>
-            <ScrollViewer Grid.Row="2" Style="{StaticResource ModernScrollViewer}" Margin="0,0,8,8">
+            <ScrollViewer Name="booksScroll" Grid.Row="2" Style="{StaticResource ModernScrollViewer}" Margin="0,0,8,8">
                 <StackPanel Margin="36,8,28,24">
                     <Grid Name="statsStrip" Margin="0,0,0,24">
                         <Grid.ColumnDefinitions>
@@ -491,6 +511,19 @@
                                                                 <ScaleTransform x:Name="CoverScale" ScaleX="1" ScaleY="1" />
                                                             </Image.RenderTransform>
                                                         </Image>
+                                                        <Grid Visibility="{DynamicResource ThemeBiteVisibility}" IsHitTestVisible="False">
+                                                            <Path Visibility="{Binding BiteVisibility}" Fill="{DynamicResource BgDark}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="52" Height="52" Margin="-12,-12,0,0" IsHitTestVisible="False">
+                                                                <Path.Data>
+                                                                    <GeometryGroup FillRule="Nonzero">
+                                                                        <EllipseGeometry Center="24,24" RadiusX="20" RadiusY="20" />
+                                                                        <EllipseGeometry Center="42,30" RadiusX="9" RadiusY="9" />
+                                                                        <EllipseGeometry Center="30,42" RadiusX="9" RadiusY="9" />
+                                                                        <EllipseGeometry Center="39,41" RadiusX="6" RadiusY="6" />
+                                                                    </GeometryGroup>
+                                                                </Path.Data>
+                                                            </Path>
+                                                            <Path Visibility="{Binding BiteVisibility}" Fill="{DynamicResource TextMuted}" Opacity="0.55" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="48,50,0,0" Width="22" Height="14" IsHitTestVisible="False" Data="M2,3 L5,1 L6,4 Z M12,8 L15,6 L16,9 Z M6,11 L8,9 L10,11 Z" />
+                                                        </Grid>
                                                         <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentColor}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Visibility="{Binding FavoriteVisibility}" IsHitTestVisible="False">
                                                             <Path Style="{StaticResource IcoFill}" Data="{StaticResource IcoHeart}" Fill="{DynamicResource OnAccent}" HorizontalAlignment="Center" />
                                                         </Border>
@@ -567,6 +600,61 @@
                     </ItemsControl>
                 </StackPanel>
             </ScrollViewer>
+            <Grid Name="collectionsPanel" Grid.Row="2" Margin="36,8,36,12" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.Resources>
+                    <Style x:Key="CollectionItemStyle" TargetType="{x:Type ListBoxItem}">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                    <ContentPresenter />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <DataTemplate x:Key="CollectionRowTemplate">
+                        <Border CornerRadius="12" BorderThickness="1" Padding="16,12" Margin="0,0,0,8" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextColor}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                    <TextBlock Text="{Binding CountText}" Foreground="{DynamicResource TextMuted}" FontSize="11.5" Margin="0,3,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="{Binding AddText}" Style="{StaticResource ModernButton}" Padding="14,7" Margin="0,0,8,0" Click="CollectionAdd_Click" />
+                                    <Button Content="{Binding OpenText}" Style="{StaticResource SoftButton}" Padding="12,7" Margin="0,0,8,0" Click="CollectionOpen_Click" />
+                                    <Button Content="{Binding RenameText}" Style="{StaticResource SoftButton}" Padding="12,7" Margin="0,0,8,0" Click="CollectionRename_Click" />
+                                    <Button Content="{Binding DeleteText}" Style="{StaticResource SoftButton}" Padding="12,7" Click="CollectionDelete_Click" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </Grid.Resources>
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <TextBlock Text="مجموعه‌ها" Foreground="{DynamicResource TextColor}" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock Name="txtCollectionsTotal" Text="" Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="12,4,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Grid.Row="1" Text="خودت مجموعه بساز، یه اسم دلخواه بهش بده و فایل‌های EPUB رو توش بذار." Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,6,0,12" TextWrapping="Wrap" />
+                <WrapPanel Grid.Row="2" Margin="0,0,0,12">
+                    <Button Name="btnCollectionNew" Style="{StaticResource ModernButton}" Padding="16,9" Click="btnCollectionNew_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource Ico}" Data="{StaticResource IcoPlus}" StrokeThickness="2" />
+                            <TextBlock Text="مجموعه‌ی جدید" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+                <ListBox Name="collectionList" Grid.Row="3" Background="Transparent" BorderThickness="0" Padding="0,0,8,0" ItemContainerStyle="{StaticResource CollectionItemStyle}" ItemTemplate="{StaticResource CollectionRowTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True" />
+                <TextBlock Name="txtCollectionsEmpty" Grid.Row="3" Text="هنوز مجموعه‌ای نساختی. روی «مجموعه‌ی جدید» بزن." Foreground="{DynamicResource TextMuted}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
+            </Grid>
         </Grid>
         <Border Name="dimOverlay" Grid.ColumnSpan="2" Background="#B30F0E17" Visibility="Collapsed" />
         <Grid Name="dropOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" IsHitTestVisible="False">

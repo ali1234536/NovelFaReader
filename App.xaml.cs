@@ -51,6 +51,7 @@ namespace EpubReader
 
             AppSettings.Load();
             Loc.Init();
+            MouseFx.Init();
             ThemeManager.Apply(AppSettings.Theme);
             CustomFontService.Initialize();
             try { RecommendedFontService.Initialize(); } catch { }

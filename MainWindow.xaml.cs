@@ -345,13 +345,22 @@ namespace EpubReader
             BuildThemeButtons();
             UpdateDarkModeButton();
             StartSupportReminder();
+            MouseFx.Changed += OnMouseFxChanged;
             Closed += (object s, EventArgs e) =>
             {
+                MouseFx.Changed -= OnMouseFxChanged;
                 StopScrollWatcher();
                 StopSupportReminder();
                 ShutdownWebView();
                 CleanupCurrentBook();
             };
+        }
+
+        // نشانگر تم موقع عوض شدن تم یا حالت موس توی صفحه‌ی خواندن هم به‌روز می‌شه
+        private async void OnMouseFxChanged(object sender, EventArgs e)
+        {
+            string css = MouseFx.ReaderFxCss.Replace("\\", "\\\\").Replace("'", "\\'");
+            await RunScriptAsync("(function(){var s=document.getElementById('rdrCursor');if(!s){s=document.createElement('style');s.id='rdrCursor';document.head.appendChild(s);}s.textContent='" + css + "';})()");
         }
 
         private void StartSupportReminder()
@@ -686,6 +695,7 @@ namespace EpubReader
             sb.Append("img{max-width:95% !important;width:auto !important;height:auto !important;display:block;margin:12px auto;}</style>");
             sb.Append("<style id=\"rdrFontFace\">").Append(BuildFontFaceCss(currentFontFamily)).Append("</style>");
             sb.Append("<style id=\"readerSpacing\">").Append(BuildSpacingCss()).Append("</style>");
+            sb.Append("<style id=\"rdrCursor\">").Append(MouseFx.ReaderFxCss).Append("</style>");
             sb.Append("<script>window.__rdrGen=").Append(docGen).Append(";window.__rdrKeys=").Append(BuildShortcutKeyMapJs()).Append(";</script>");
             sb.Append("<script>(function(){");
             sb.Append("function post(m){try{window.chrome.webview.postMessage(m);}catch(x){}}");

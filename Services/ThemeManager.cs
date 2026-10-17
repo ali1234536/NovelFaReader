@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -292,6 +292,8 @@ namespace EpubReader.Services
                 r["ThemeArtVisibility"] = Visibility.Visible;
                 // بخیه و ترکِ زخم فقط برای تم «سوبارو · شکم‌پرستی»
                 r["ThemeStitchVisibility"] = (ch.Id == "tsugi") ? Visibility.Visible : Visibility.Collapsed;
+                // جلد گاز‌خورده‌ی کتاب‌های تمام‌شده هم فقط برای همین تم
+                r["ThemeBiteVisibility"] = (ch.Id == "tsugi") ? Visibility.Visible : Visibility.Collapsed;
                 r["ThemeAuraA"] = AuraBrush(Col(pa.Aura1), 0.0, 0.0, light ? 0.22 : 0.30);
                 r["ThemeAuraB"] = AuraBrush(Col(pa.Aura2), 1.0, 1.0, light ? 0.18 : 0.24);
             }
@@ -300,6 +302,7 @@ namespace EpubReader.Services
                 r["ThemeEmblem"] = Geometry.Empty;
                 r["ThemeArtVisibility"] = Visibility.Collapsed;
                 r["ThemeStitchVisibility"] = Visibility.Collapsed;
+                r["ThemeBiteVisibility"] = Visibility.Collapsed;
                 r["ThemeAuraA"] = Brushes.Transparent;
                 r["ThemeAuraB"] = Brushes.Transparent;
             }

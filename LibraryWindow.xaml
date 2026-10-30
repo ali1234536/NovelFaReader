@@ -105,12 +105,31 @@
                                 <TextBlock Name="txtProfileName" Text="کتابخوان من" Foreground="{DynamicResource TextColor}" FontSize="13" FontWeight="Bold" MaxWidth="104" TextTrimming="CharacterEllipsis" />
                                 <Grid Margin="0,4,0,0" HorizontalAlignment="Left">
                                     <Border CornerRadius="8" Background="{DynamicResource AccentColor}" Opacity="0.18" />
-                                    <TextBlock Name="txtRank" Text="تازه‌وارد" Foreground="{DynamicResource AccentColor}" FontSize="10" FontWeight="SemiBold" Margin="8,2,8,3" />
+                                    <TextBlock Name="txtRank" Cursor="Hand" MouseLeftButtonDown="Rank_MouseDown" MouseLeftButtonUp="Rank_MouseUp" Text="تازه‌وارد" Foreground="{DynamicResource AccentColor}" FontSize="10" FontWeight="SemiBold" Margin="8,2,8,3" />
                                 </Grid>
                                 <TextBlock Name="txtProfileCount" Text="0 کتاب" Foreground="{DynamicResource TextMuted}" FontSize="10" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" MaxWidth="104" />
                             </StackPanel>
                         </Grid>
                     </Border>
+                    <StackPanel Name="backupPanel" DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                        <TextBlock Text="پشتیبان‌گیری و بازیابی" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="8,0,0,6" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Name="btnBackupCreate" Grid.Column="0" Style="{StaticResource SoftButton}" Padding="6,9" FontSize="11.5" ToolTip="ساخت فایل بکاپ از رنک، آواتار، اسم و فونت‌های شخصی" Click="btnBackupCreate_Click">
+                                <TextBlock Text="ایجاد بکاپ" TextTrimming="CharacterEllipsis" />
+                            </Button>
+                            <Button Name="btnBackupRestore" Grid.Column="2" Style="{StaticResource SoftButton}" Padding="6,9" FontSize="11.5" ToolTip="بازیابی رنک، آواتار و فونت‌ها از یک فایل بکاپ" Click="btnBackupRestore_Click">
+                                <TextBlock Text="بازیابی از بکاپ" TextTrimming="CharacterEllipsis" />
+                            </Button>
+                        </Grid>
+                        <Button Name="btnGuide" Style="{StaticResource SoftButton}" Padding="6,9" FontSize="11.5" Margin="0,8,0,0" Click="btnGuide_Click">
+                            <TextBlock Text="راهنمای برنامه" TextTrimming="CharacterEllipsis" />
+                        </Button>
+                    </StackPanel>
                     <StackPanel>
                         <TextBlock Text="کتاب‌ها" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="8,0,0,8" />
                         <Button Name="btnTabAll" Tag="all" Style="{StaticResource NavButton}" Click="TabButton_Click">
@@ -485,6 +504,13 @@
                         <TextBlock Name="txtSectionCount" Text="" Foreground="{DynamicResource TextMuted}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" />
                     </DockPanel>
                     <TextBlock Name="txtEmpty" Text="اینجا هنوز کتابی نیست&#10;فایل‌های EPUB رو بکش و اینجا رها کن" TextAlignment="Center" LineHeight="26" Foreground="{DynamicResource TextMuted}" FontSize="14" HorizontalAlignment="Center" Margin="0,60,0,0" Visibility="Collapsed" />
+                    <Border Name="selBar" Visibility="Collapsed" CornerRadius="12" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentColor}" BorderThickness="1" Padding="14,8" Margin="0,0,0,12">
+                        <DockPanel LastChildFill="True">
+                            <Button Name="btnSelCancel" DockPanel.Dock="Right" Content="لغو" Padding="12,4" Margin="8,0,0,0" Cursor="Hand" Click="btnSelCancel_Click" />
+                            <Button Name="btnSelDelete" DockPanel.Dock="Right" Content="حذف از کتابخانه" Padding="12,4" Cursor="Hand" Click="btnSelDelete_Click" />
+                            <TextBlock Name="txtSelCount" VerticalAlignment="Center" Foreground="{DynamicResource TextColor}" FontWeight="Bold" />
+                        </DockPanel>
+                    </Border>
                     <ItemsControl Name="listBoxBooks">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>

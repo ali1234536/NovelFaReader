@@ -130,11 +130,35 @@ namespace EpubReader
             return RankService.NameFor(done);
         }
 
+        private void btnGuide_Click(object sender, RoutedEventArgs e)
+        {
+            GuideWindow.ShowFor(this);
+        }
+
+        // کلیک روی نشان رتبه: دیالوگ همه‌ی رنک‌ها (کلیک نباید به کارت پروفایل برسه)
+        private void Rank_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+        }
+
+        private void Rank_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            RanksWindow.ShowFor(this);
+        }
+
         private ThemeParticleLayer themeParticles;
 
-        private int CompletedCount()
+        // شمارش خام کتاب‌های تمام‌شده‌ی کتابخونه‌ی فعلی (کتاب‌های خصوصی حساب نمی‌شن)
+        private int LibraryFinishedCount()
         {
             return books == null ? 0 : books.Count((Book b) => !b.IsPrivate && b.IsCompleted);
+        }
+
+        // تعداد مؤثر برای رنک و رکورد = max(شمارش کتابخونه, کفِ بازیابی‌شده از بکاپ)
+        private int CompletedCount()
+        {
+            return RankService.Effective(LibraryFinishedCount());
         }
 
         // اگه رتبه بالا رفته باشه تم‌های تازه باز می‌شن و جشن گرفته می‌شه
@@ -153,6 +177,49 @@ namespace EpubReader
             }
             int fromRank = Math.Max(0, oldMax) + (oldMax < 0 ? 0 : 1);
             Dispatcher.BeginInvoke(new Action(() => AnnounceUnlocks(fromRank, newRank)), DispatcherPriority.ApplicationIdle);
+        }
+
+        // جشن XP فقط توی صفحه‌ی خانه: از آخرین سطحِ جشن‌گرفته‌شده تا الان
+        private bool xpCelebrating;
+
+        private void CheckXpCelebration(XpLevel now)
+        {
+            if (xpCelebrating)
+            {
+                return;
+            }
+            XpLevel before = XpRank.LevelFor(XpStore.CelebratedXp);
+            if (before.Key == now.Key)
+            {
+                return;
+            }
+            int toXp = now.Xp;
+            bool titleUp = now.TitleIndex > before.TitleIndex || now.EternityMarks > before.EternityMarks;
+            List<string> names = new List<string>();
+            foreach (CharacterTheme t in CharacterThemes.All)
+            {
+                int need = XpRank.XpTitleFor(t);
+                if (need > before.TitleIndex && need <= now.TitleIndex && need > 0)
+                {
+                    names.Add(Loc.Q(t.Name));
+                }
+            }
+            XpStore.CelebratedXp = toXp;
+            if (!titleUp && names.Count == 0)
+            {
+                return;
+            }
+            xpCelebrating = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                string msg = Loc.F("رتبه‌ات شد {0}!", Loc.Q(now.DisplayName));
+                if (names.Count > 0)
+                {
+                    msg += "\n" + Loc.F("تم {0} برات باز شد.", string.Join(Loc.ListSeparator, names.ToArray()));
+                }
+                DarkMessageBox.Show(msg, Loc.T("ارتقای رتبه"), MessageBoxButton.OK, MessageBoxImage.Information);
+                xpCelebrating = false;
+            }), DispatcherPriority.ApplicationIdle);
         }
 
         private void AnnounceUnlocks(int fromRank, int toRank)
@@ -191,6 +258,53 @@ namespace EpubReader
         }
 
         // سلام بر اساس ساعت، لقب، تعداد کتاب‌ها و حلقه‌ی پیشرفت (تمام‌شده / همه). کتاب‌های خصوصی حساب نمی‌شوند
+        private bool xpRekeyRunning;
+
+        // یک‌بار (پس‌زمینه): ledger همه‌ی کتاب‌ها از Id به کلید محتوایی (هش فایل) می‌ره. کتاب‌هایی که فایلشون نیست بعداً موقع باز شدن منتقل می‌شن
+        private async void RekeyXpLedgerAsync()
+        {
+            if (xpRekeyRunning || XpStore.Rekeyed || books == null)
+            {
+                return;
+            }
+            xpRekeyRunning = true;
+            try
+            {
+                List<Book> snapshot = new List<Book>(books);
+                List<KeyValuePair<string, string>> pairs = await Task.Run(() =>
+                {
+                    List<KeyValuePair<string, string>> found = new List<KeyValuePair<string, string>>();
+                    foreach (Book b in snapshot)
+                    {
+                        if (b.IsPrivate || string.IsNullOrEmpty(b.Id) || string.IsNullOrEmpty(b.FilePath) || !File.Exists(b.FilePath))
+                        {
+                            continue;
+                        }
+                        try
+                        {
+                            found.Add(new KeyValuePair<string, string>(b.Id, XpLedger.ContentKeyFor(ReadingRecordStore.Sha256OfFile(b.FilePath))));
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    return found;
+                });
+                foreach (KeyValuePair<string, string> p in pairs)
+                {
+                    XpStore.TransferLedger(p.Key, p.Value);
+                }
+                XpStore.Rekeyed = true;
+            }
+            catch
+            {
+            }
+            finally
+            {
+                xpRekeyRunning = false;
+            }
+        }
+
         private void UpdateProfileStats()
         {
             if (books == null) return;
@@ -199,8 +313,16 @@ namespace EpubReader
             int done = books.Count((Book b) => !b.IsPrivate && b.IsCompleted);
 
             txtProfileCount.Text = done > 0 ? Loc.FN("{0} کتاب · {1} تمام‌شده", total, total, done) : Loc.FN("{0} کتاب", total, total);
-            txtRank.Text = RankFor(done);
-            CheckRankUp(done);
+            // رنک و اعلام رتبه‌ی جدید از تعداد مؤثر حساب می‌شن (کفِ بکاپ هم حساب می‌شه)؛ شمارش‌های نمای کتابخونه خام می‌مونن
+            int rankDone = RankService.Effective(done);
+            CheckRankUp(rankDone);
+            // رتبه‌ی نمایشی از XP (بعد از مهاجرت یک‌باره از رتبه‌ی قدیمی)؛ ستاره‌ها با پیشرفت داخل عنوان بالا می‌رن
+            XpStore.MigrateIfNeeded(books, rankDone);
+            RekeyXpLedgerAsync();
+            XpLevel xpLevel = XpRank.LevelFor(XpStore.TotalXp);
+            txtRank.Text = xpLevel.DisplayName;
+            txtRank.ToolTip = Loc.F("{0} XP", XpStore.TotalXp) + (xpLevel.XpToNext > 0 ? " · " + Loc.F("{0} XP تا مرحله‌ی بعد", xpLevel.XpToNext) : "");
+            CheckXpCelebration(xpLevel);
             txtThemeCount.Text = RankService.UnlockedCount() + "/" + CharacterThemes.VisibleCount();
 
             double fraction = total > 0 ? (double)done / total : 0.0;
@@ -371,6 +493,10 @@ namespace EpubReader
             {
                 ProfileService.SaveName(win.EnteredName);
                 RefreshProfileUi();
+                if (!GuideWindow.Seen)
+                {
+                    GuideWindow.ShowFor(this);
+                }
             }
             OpenStartupFile();
         }
@@ -416,7 +542,7 @@ namespace EpubReader
         }
 
         // فایل EPUB رو (اگه توی کتابخونه نیست اضافه می‌کنه) و باز می‌کنه
-        public void OpenExternalFile(string path)
+        public async void OpenExternalFile(string path)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
@@ -424,12 +550,15 @@ namespace EpubReader
             }
             try
             {
-                Book target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, path, StringComparison.OrdinalIgnoreCase));
+                bool convertible = BookConverter.IsConvertible(path);
+                string libPath = convertible ? BookConverter.TargetPathFor(path) : path;
+                Book target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, libPath, StringComparison.OrdinalIgnoreCase));
                 if (target == null)
                 {
-                    LibraryService.AddOrUpdateBook(ImportEpub(path));
+                    Book importedBook = await Task.Run(() => ImportEpub(convertible ? BookConverter.ConvertToEpub(path) : path));
+                    LibraryService.AddOrUpdateBook(importedBook);
                     LoadLibrary();
-                    target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, path, StringComparison.OrdinalIgnoreCase));
+                    target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, libPath, StringComparison.OrdinalIgnoreCase));
                 }
                 if (target != null)
                 {
@@ -491,7 +620,7 @@ namespace EpubReader
             txtHeroTitle.Text = heroBook.DisplayTitle;
             txtHeroTitle.FlowDirection = Loc.Flow;
             Loc.FixTextDirection(txtHeroTitle);
-            txtHeroChapter.Text = Loc.F("بخش {0} از {1}", heroBook.LastChapterDisplay, heroBook.TotalChapters);
+            txtHeroChapter.Text = Loc.F("فصل {0} از {1}", heroBook.LastChapterDisplay, heroBook.TotalChapters);
             progressHero.BeginAnimation(RangeBase.ValueProperty, null);
             progressHero.SetResourceReference(Control.ForegroundProperty, heroBook.IsCompleted ? "SuccessColor" : "AccentColor");
             progressHero.Value = heroBook.ProgressPercent;
@@ -541,6 +670,11 @@ namespace EpubReader
 
         private void LoadLibrary()
         {
+            selectedPaths.Clear();
+            if (selBar != null)
+            {
+                selBar.Visibility = Visibility.Collapsed;
+            }
             LoadBooksOnly();
             ApplyFilter();
         }
@@ -772,12 +906,12 @@ namespace EpubReader
 
         private LibraryCardItem BuildSingleCard(Book b)
         {
-            string progress = (string.IsNullOrEmpty(b.LastOpenedDate) ? Loc.FN("{0} بخش · شروع نشده", b.TotalChapters, b.TotalChapters) : Loc.F("بخش {0} از {1}", b.LastChapterDisplay, b.TotalChapters));
+            string progress = (string.IsNullOrEmpty(b.LastOpenedDate) ? Loc.FN("{0} فصل · شروع نشده", b.TotalChapters, b.TotalChapters) : Loc.F("فصل {0} از {1}", b.LastChapterDisplay, b.TotalChapters));
             LibraryCardItem libraryCardItem = new LibraryCardItem();
             libraryCardItem.IsCollection = false;
             libraryCardItem.Title = b.DisplayTitle;
             libraryCardItem.CoverImagePath = b.CoverImagePath;
-            libraryCardItem.SubtitleText = Loc.FN("{0} بخش", b.TotalChapters, b.TotalChapters);
+            libraryCardItem.SubtitleText = Loc.FN("{0} فصل", b.TotalChapters, b.TotalChapters);
             libraryCardItem.ProgressText = progress;
             libraryCardItem.ProgressPercent = b.ProgressPercent;
             libraryCardItem.SingleBook = b;
@@ -800,6 +934,11 @@ namespace EpubReader
                 if (!PinWindow.Authenticate())
                 {
                     return;
+                }
+                if (PinWindow.ForgotPinPerformed)
+                {
+                    PinWindow.ForgotPinPerformed = false;
+                    LoadBooksOnly();
                 }
                 PrivateUnlockedThisSession = true;
             }
@@ -933,6 +1072,169 @@ namespace EpubReader
             Dispatcher.BeginInvoke(new Action(PrewarmReaderWindow), DispatcherPriority.ApplicationIdle);
         }
 
+        // ---------- پشتیبان‌گیری و بازیابی (رنک، آواتار، اسم و فونت‌های شخصی) ----------
+        private bool backupBusy;
+
+        private void SetBackupBusy(bool busy, string text)
+        {
+            backupBusy = busy;
+            btnBackupCreate.IsEnabled = !busy;
+            btnBackupRestore.IsEnabled = !busy;
+            if (busy)
+            {
+                ShowBusy(text, 0.0);
+            }
+            else
+            {
+                HideBusy();
+            }
+        }
+
+        private async void btnBackupCreate_Click(object sender, RoutedEventArgs e)
+        {
+            if (backupBusy)
+            {
+                return;
+            }
+            SaveFileDialog dlg = new SaveFileDialog
+            {
+                Title = Loc.T("ذخیره‌ی بکاپ"),
+                Filter = BackupService.FileFilter,
+                DefaultExt = BackupFormat.Extension,
+                AddExtension = true,
+                FileName = BackupService.DefaultFileName(),
+                OverwritePrompt = true
+            };
+            if (dlg.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            SetBackupBusy(true, "در حال ساخت بکاپ…");
+            try
+            {
+                bool avatarSkipped;
+                int fontsSkipped;
+                BackupData data = BackupService.Collect(LibraryFinishedCount(), out avatarSkipped, out fontsSkipped);
+                await BackupService.ExportAsync(dlg.FileName, data);
+
+                List<string> lines = new List<string>();
+                lines.Add(Loc.T("بکاپ با موفقیت ساخته شد."));
+                lines.Add(Loc.F("رنک: {0}", Loc.Q(RankService.Get(Math.Max(0, data.MaxRank)).Name)) + Loc.ListSeparator + Loc.F("کتاب‌های تمام‌شده: {0}", data.FinishedBooks));
+                lines.Add(Loc.F("تعداد فونت‌ها: {0}", data.Fonts.Count) + Loc.ListSeparator + Loc.T(data.Avatar != null ? "آواتار: دارد" : "آواتار: ندارد"));
+                if (fontsSkipped > 0)
+                {
+                    lines.Add(Loc.FN("{0} فونت به‌خاطر خراب بودن یا بزرگی داخل بکاپ نرفت.", fontsSkipped, fontsSkipped));
+                }
+                if (avatarSkipped)
+                {
+                    lines.Add(Loc.T("آواتار به‌خاطر خراب بودن یا بزرگی داخل بکاپ نرفت."));
+                }
+                DarkMessageBox.Show(string.Join("\n", lines), Loc.T("ایجاد بکاپ"), MessageBoxButton.OK, MessageBoxImage.Asterisk);
+            }
+            catch (BackupException ex)
+            {
+                DarkMessageBox.Show(Loc.T("ساخت بکاپ انجام نشد:") + "\n" + BackupService.Describe(ex), Loc.T("ایجاد بکاپ"), MessageBoxButton.OK, MessageBoxImage.Hand);
+            }
+            catch (Exception ex)
+            {
+                DarkMessageBox.Show(Loc.T("ساخت بکاپ انجام نشد:") + "\n" + ex.Message, Loc.T("ایجاد بکاپ"), MessageBoxButton.OK, MessageBoxImage.Hand);
+            }
+            finally
+            {
+                SetBackupBusy(false, null);
+            }
+        }
+
+        private async void btnBackupRestore_Click(object sender, RoutedEventArgs e)
+        {
+            if (backupBusy)
+            {
+                return;
+            }
+            OpenFileDialog dlg = new OpenFileDialog
+            {
+                Title = Loc.T("انتخاب فایل بکاپ"),
+                Filter = BackupService.FileFilter,
+                Multiselect = false
+            };
+            if (dlg.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            SetBackupBusy(true, "در حال بررسی بکاپ…");
+            try
+            {
+                // اول اعتبارسنجی کامل؛ تا تموم نشه هیچ چیزی روی برنامه اعمال نمی‌شه
+                BackupData data;
+                try
+                {
+                    data = await BackupService.InspectAsync(dlg.FileName);
+                }
+                catch (BackupException ex)
+                {
+                    DarkMessageBox.Show(BackupService.Describe(ex), Loc.T("بازیابی از بکاپ"), MessageBoxButton.OK, MessageBoxImage.Hand);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    DarkMessageBox.Show(Loc.T("خوندن فایل بکاپ انجام نشد.") + "\n" + ex.Message, Loc.T("بازیابی از بکاپ"), MessageBoxButton.OK, MessageBoxImage.Hand);
+                    return;
+                }
+
+                HideBusy();
+                if (!DarkMessageBox.ShowChoice(BackupService.BuildPreviewText(data), "بازیابی از بکاپ", "بازیابی کن", "لغو", MessageBoxImage.Question))
+                {
+                    return;
+                }
+
+                ShowBusy(Loc.T("در حال بازیابی…"), 0.0);
+                BackupRestoreResult result;
+                Mouse.OverrideCursor = Cursors.Wait;
+                try
+                {
+                    result = BackupService.Apply(data, LibraryFinishedCount());
+                }
+                finally
+                {
+                    Mouse.OverrideCursor = null;
+                }
+
+                // رابط کاربری بدون ری‌استارت تازه می‌شه: پروفایل، آواتار، رنک و فونت‌ها (پنجره‌ی خوانش دوباره ساخته می‌شه)
+                LoadLibrary();
+                RefreshProfileUi();
+                ResetPrewarmedReader();
+                DarkMessageBox.ShowChoice(BackupService.BuildResultText(result), "بازیابی انجام شد", "بستن", null, MessageBoxImage.Asterisk);
+            }
+            catch (Exception ex)
+            {
+                DarkMessageBox.Show(Loc.T("بازیابی انجام نشد:") + "\n" + ex.Message, Loc.T("بازیابی از بکاپ"), MessageBoxButton.OK, MessageBoxImage.Hand);
+            }
+            finally
+            {
+                SetBackupBusy(false, null);
+            }
+        }
+
+        // پنجره‌ی خوانشِ از قبل آماده‌شده فهرست فونت‌ها رو موقع ساخته شدن گرفته؛ بعد از تغییر فونت‌ها دوباره ساخته می‌شه
+        private void ResetPrewarmedReader()
+        {
+            try
+            {
+                if (prewarmedReader != null)
+                {
+                    prewarmedReader.Close();
+                    prewarmedReader = null;
+                }
+            }
+            catch
+            {
+                prewarmedReader = null;
+            }
+            Dispatcher.BeginInvoke(new Action(PrewarmReaderWindow), DispatcherPriority.ApplicationIdle);
+        }
+
         // ---------- مجموعه‌ها: ساختن دستی مجموعه با اسم دلخواه و گذاشتن EPUB توش ----------
         private List<CollectionRow> BuildCollectionRows(bool applySearch)
         {
@@ -1031,7 +1333,7 @@ namespace EpubReader
         {
             OpenFileDialog ofd = new OpenFileDialog
             {
-                Filter = Loc.T("فایل‌های EPUB (*.epub)") + "|*.epub",
+                Filter = Loc.T("کتاب‌ها (EPUB، PDF، TXT، Markdown، DOCX، CBZ)") + "|" + BookConverter.DialogPatterns,
                 Title = Loc.T("انتخاب فایل‌های EPUB برای این مجموعه"),
                 Multiselect = true
             };
@@ -1106,9 +1408,7 @@ namespace EpubReader
         private static readonly string[][] secretThemeCodes = new string[][]
         {
             new string[] { "BEAKO", "beatrice" },
-            new string[] { "EMT", "emilia" },
-            new string[] { "TEA", "echidna" },
-            new string[] { "TSUGI", "tsugi" }
+            new string[] { "EMT", "emilia" }
         };
 
         // اگه این کلید آخرین حرف یک ترفند باشه true برمی‌گردونه (و خودش کلید رو می‌خوره)
@@ -1239,6 +1539,21 @@ namespace EpubReader
             {
                 e.Handled = true;
                 return;
+            }
+            if (selectedPaths.Count > 0 && !(Keyboard.FocusedElement is TextBox))
+            {
+                if (e.Key == Key.Escape)
+                {
+                    e.Handled = true;
+                    ClearSelection();
+                    return;
+                }
+                if (e.Key == Key.Delete)
+                {
+                    e.Handled = true;
+                    DeleteSelectedBooks();
+                    return;
+                }
             }
             string id = ShortcutService.Resolve(e, "lib.");
             if (id == null)
@@ -1553,7 +1868,7 @@ namespace EpubReader
         {
             OpenFileDialog ofd = new OpenFileDialog
             {
-                Filter = Loc.T("فایل‌های EPUB (*.epub)") + "|*.epub",
+                Filter = Loc.T("کتاب‌ها (EPUB، PDF، TXT، Markdown، DOCX، CBZ)") + "|" + BookConverter.DialogPatterns,
                 Title = Loc.T("انتخاب فایل EPUB"),
                 Multiselect = true
             };
@@ -1568,7 +1883,7 @@ namespace EpubReader
 
         private static bool IsEpubFile(string path)
         {
-            return !string.IsNullOrEmpty(path) && string.Equals(Path.GetExtension(path), ".epub", StringComparison.OrdinalIgnoreCase);
+            return !string.IsNullOrEmpty(path) && (string.Equals(Path.GetExtension(path), ".epub", StringComparison.OrdinalIgnoreCase) || BookConverter.IsConvertible(path));
         }
 
         private static bool HasDroppableFiles(DragEventArgs e)
@@ -1688,9 +2003,9 @@ namespace EpubReader
                 {
                     if (Directory.Exists(p))
                     {
-                        foreach (string f in Directory.GetFiles(p, "*.epub", SearchOption.AllDirectories))
+                        foreach (string f in Directory.GetFiles(p, "*", SearchOption.AllDirectories))
                         {
-                            if (seen.Add(f))
+                            if (IsEpubFile(f) && !BookConverter.IsPlainZip(f) && seen.Add(f))
                             {
                                 result.Add(f);
                             }
@@ -1752,7 +2067,7 @@ namespace EpubReader
             {
                 if (ignored > 0)
                 {
-                    DarkMessageBox.Show(Loc.T("فقط فایل‌های EPUB (یا پوشه‌ی حاوی اون‌ها) قابل افزودن هستن."), Loc.T("افزودن کتاب"), MessageBoxButton.OK, MessageBoxImage.Asterisk);
+                    DarkMessageBox.Show(Loc.T("فقط فایل‌های EPUB، PDF، TXT، Markdown، DOCX و CBZ (یا پوشه‌ی حاوی اون‌ها) قابل افزودن هستن."), Loc.T("افزودن کتاب"), MessageBoxButton.OK, MessageBoxImage.Asterisk);
                 }
                 return;
             }
@@ -1768,12 +2083,14 @@ namespace EpubReader
                 List<string> toImport = new List<string>();
                 foreach (string f in files)
                 {
-                    if (existing.Contains(f))
+                    // فایل TXT/Markdown/DOCX با EPUBِ تبدیل‌شده‌ش وارد کتابخونه می‌شه؛ برای تشخیص تکراری همون مسیر چک می‌شه
+                    string libPath = BookConverter.IsConvertible(f) ? BookConverter.TargetPathFor(f) : f;
+                    if (existing.Contains(libPath))
                     {
                         if (!string.IsNullOrEmpty(targetCollection))
                         {
                             // کتابی که از قبل توی کتابخونه بود فقط به مجموعه منتقل می‌شه
-                            LibraryService.SetCollection(f, targetCollection);
+                            LibraryService.SetCollection(libPath, targetCollection);
                             added++;
                         }
                         else
@@ -1792,7 +2109,7 @@ namespace EpubReader
                     ShowBusy(Loc.F("در حال افزودن {0} از {1}…", i + 1, toImport.Count), i * 100.0 / toImport.Count);
                     try
                     {
-                        Book imported = await Task.Run(() => ImportEpub(path));
+                        Book imported = await Task.Run(() => ImportEpub(BookConverter.IsConvertible(path) ? BookConverter.ConvertToEpub(path) : path));
                         if (!string.IsNullOrEmpty(targetCollection))
                         {
                             imported.CollectionName = targetCollection;
@@ -1912,6 +2229,12 @@ namespace EpubReader
             LibraryCardItem item = (fe != null) ? (fe.Tag as LibraryCardItem) : null;
             if (item != null)
             {
+                bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+                if (!item.IsCollection && item.SingleBook != null && (ctrl || selectedPaths.Count > 0))
+                {
+                    ToggleSelection(item.SingleBook, fe as Border);
+                    return;
+                }
                 if (item.IsCollection)
                 {
                     OpenCollection(item.CollectionName);
@@ -1924,6 +2247,87 @@ namespace EpubReader
                     }
                 }
             }
+        }
+
+        // انتخاب چندتایی (Ctrl+کلیک): انتخاب کتاب‌ها و حذف گروهی از کتابخونه
+        private readonly Dictionary<string, Border> selectedPaths = new Dictionary<string, Border>(StringComparer.OrdinalIgnoreCase);
+
+        private void ToggleSelection(Book book, Border card)
+        {
+            if (selectedPaths.ContainsKey(book.FilePath))
+            {
+                Border old = selectedPaths[book.FilePath];
+                if (old != null)
+                {
+                    old.ClearValue(Border.BorderBrushProperty);
+                    old.ClearValue(Border.BorderThicknessProperty);
+                }
+                selectedPaths.Remove(book.FilePath);
+            }
+            else
+            {
+                if (card != null)
+                {
+                    card.BorderBrush = (Brush)FindResource("AccentColor");
+                    card.BorderThickness = new Thickness(3);
+                }
+                selectedPaths[book.FilePath] = card;
+            }
+            UpdateSelectionBar();
+        }
+
+        private void UpdateSelectionBar()
+        {
+            selBar.Visibility = selectedPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            txtSelCount.Text = Loc.FN("{0} کتاب انتخاب شد", selectedPaths.Count, selectedPaths.Count);
+            btnSelDelete.Content = Loc.T("حذف از کتابخانه");
+            btnSelCancel.Content = Loc.T("لغو");
+        }
+
+        private void ClearSelection()
+        {
+            foreach (KeyValuePair<string, Border> kv in selectedPaths)
+            {
+                if (kv.Value != null)
+                {
+                    kv.Value.ClearValue(Border.BorderBrushProperty);
+                    kv.Value.ClearValue(Border.BorderThicknessProperty);
+                }
+            }
+            selectedPaths.Clear();
+            UpdateSelectionBar();
+        }
+
+        private void btnSelCancel_Click(object sender, RoutedEventArgs e)
+        {
+            ClearSelection();
+        }
+
+        private void btnSelDelete_Click(object sender, RoutedEventArgs e)
+        {
+            DeleteSelectedBooks();
+        }
+
+        private void DeleteSelectedBooks()
+        {
+            if (selectedPaths.Count == 0)
+            {
+                return;
+            }
+            int n = selectedPaths.Count;
+            MessageBoxResult result = DarkMessageBox.Show(Loc.FN("{0} کتاب از کتابخونه حذف بشه؟\n(خود فایل‌های EPUB پاک نمیشن)", n, n), Loc.T("حذف کتاب"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+            List<string> paths = new List<string>(selectedPaths.Keys);
+            selectedPaths.Clear();
+            foreach (string p in paths)
+            {
+                LibraryService.RemoveBook(p);
+            }
+            LoadLibrary();
+            UpdateSelectionBar();
         }
 
         private void OpenCollection(string collectionName)
@@ -1946,8 +2350,8 @@ namespace EpubReader
             {
                 return true;
             }
-            string status = (book.IsCompleted ? Loc.T("این کتاب رو تموم کردی.") : Loc.F("تا بخش {0} از {1} خوندی.", book.LastChapterDisplay, book.TotalChapters));
-            MessageBoxResult result = DarkMessageBox.Show(status + Loc.F("\nمی‌خوای از اول بخونیش؟\n\nبله: از اول (پیشرفت صفر میشه)\nخیر: ادامه از بخش {0}", book.LastChapterDisplay), "شروع دوباره؟", MessageBoxButton.YesNo, MessageBoxImage.Question, true);
+            string status = (book.IsCompleted ? Loc.T("این کتاب رو تموم کردی.") : Loc.F("تا فصل {0} از {1} خوندی.", book.LastChapterDisplay, book.TotalChapters));
+            MessageBoxResult result = DarkMessageBox.Show(status + Loc.F("\nمی‌خوای از اول بخونیش؟\n\nبله: از اول (پیشرفت صفر میشه)\nخیر: ادامه از فصل {0}", book.LastChapterDisplay), "شروع دوباره؟", MessageBoxButton.YesNo, MessageBoxImage.Question, true);
             if (result == MessageBoxResult.Cancel)
             {
                 return false;

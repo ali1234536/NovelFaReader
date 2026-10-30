@@ -31,7 +31,7 @@ namespace EpubReader
                 try
                 {
                     string full = Path.GetFullPath(arg.Trim('"'));
-                    if (File.Exists(full) && full.EndsWith(".epub", StringComparison.OrdinalIgnoreCase))
+                    if (File.Exists(full) && (full.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) || BookConverter.IsConvertible(full)))
                     {
                         StartupFile = full;
                         break;
@@ -147,7 +147,7 @@ namespace EpubReader
                     try
                     {
                         string full = Path.GetFullPath(message.Trim().Trim('"'));
-                        if (File.Exists(full) && full.EndsWith(".epub", StringComparison.OrdinalIgnoreCase))
+                        if (File.Exists(full) && (full.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) || BookConverter.IsConvertible(full)))
                         {
                             path = full;
                         }
@@ -206,6 +206,14 @@ namespace EpubReader
                 string command = "\"" + exe + "\" \"%1\"";
                 string progId = "EpubReaderApp.epub";
                 string commandKeyPath = @"Software\Classes\" + progId + @"\shell\open\command";
+
+                foreach (string extra in new string[] { ".pdf", ".txt", ".md", ".docx" })
+                {
+                    using (RegistryKey k = Registry.CurrentUser.CreateSubKey("Software\\Classes\\" + extra + "\\OpenWithProgids"))
+                    {
+                        k.SetValue(progId, new byte[0], RegistryValueKind.None);
+                    }
+                }
 
                 using (RegistryKey existing = Registry.CurrentUser.OpenSubKey(commandKeyPath))
                 {

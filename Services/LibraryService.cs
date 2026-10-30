@@ -149,6 +149,7 @@ public static class LibraryService
 	public static void RemoveBook(string filePath)
 	{
 		List<Book> books = LoadBooks();
+		CaptureRecord(books.Find((Book b) => b.FilePath == filePath));
 		books.RemoveAll((Book b) => b.FilePath == filePath);
 		SaveBooks(books);
 	}
@@ -176,9 +177,85 @@ public static class LibraryService
 		}
 		else
 		{
+			ApplyPendingProgress(book);
 			books.Add(book);
 		}
 		SaveBooks(books);
+	}
+
+	// ---------- رکوردهای پیشرفت (هم‌فرمت با اندروید) ----------
+	// موقع اضافه شدن کتاب تازه: اگه رکوردی برای همین فایل (SHA-256 یا شناسه‌ی OPF) هست اعمال می‌شه
+	private static void ApplyPendingProgress(Book book)
+	{
+		if (book == null || book.IsPrivate || string.IsNullOrEmpty(book.FilePath) || ReadingRecordStore.IsEmpty() || !File.Exists(book.FilePath))
+		{
+			return;
+		}
+		try
+		{
+			ReadingRecord rec = ReadingRecordStore.Find(ReadingRecordStore.Sha256OfFile(book.FilePath), ReadingRecordStore.ReadEpubIdentifier(book.FilePath));
+			if (rec != null)
+			{
+				rec.ApplyTo(book);
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	// قبل از حذف کتاب، جاش توی رکوردها نگه داشته می‌شه (کتاب خصوصی هرگز)
+	private static void CaptureRecord(Book book)
+	{
+		if (book == null || book.IsPrivate || string.IsNullOrEmpty(book.FilePath) || !File.Exists(book.FilePath))
+		{
+			return;
+		}
+		try
+		{
+			ReadingRecordStore.Upsert(ReadingRecord.FromBook(book, ReadingRecordStore.Sha256OfFile(book.FilePath), ReadingRecordStore.ReadEpubIdentifier(book.FilePath)));
+		}
+		catch
+		{
+		}
+	}
+
+	// بازیابی بکاپ: رکوردها توی فروشگاه محلی ادغام و روی کتاب‌های فعلی اعمال می‌شن. تعداد کتاب‌های اعمال‌شده برمی‌گرده
+	public static int ApplyBackupRecords(List<ReadingRecord> items)
+	{
+		if (items == null || items.Count == 0)
+		{
+			return 0;
+		}
+		ReadingRecordStore.MergeAll(items);
+		List<Book> books = LoadBooks();
+		bool canSave = !lastLoadFailed;
+		int updated = 0;
+		bool changed = false;
+		foreach (Book book in books)
+		{
+			if (book.IsPrivate || string.IsNullOrEmpty(book.FilePath) || !File.Exists(book.FilePath))
+			{
+				continue;
+			}
+			try
+			{
+				ReadingRecord rec = ReadingRecordStore.Find(ReadingRecordStore.Sha256OfFile(book.FilePath), ReadingRecordStore.ReadEpubIdentifier(book.FilePath));
+				if (rec != null && rec.ApplyTo(book))
+				{
+					updated++;
+					changed = true;
+				}
+			}
+			catch
+			{
+			}
+		}
+		if (changed && canSave)
+		{
+			SaveBooks(books);
+		}
+		return updated;
 	}
 
 	private static readonly HashSet<string> openedThisSession = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

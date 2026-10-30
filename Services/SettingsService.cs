@@ -32,6 +32,22 @@ public static class SettingsService
 		File.WriteAllText(SettingsFilePath, hash, Encoding.UTF8);
 	}
 
+	// پاک کردن پین (برای «فراموشی پین»)
+	public static void ClearPin()
+	{
+		try
+		{
+			if (File.Exists(SettingsFilePath))
+			{
+				File.Delete(SettingsFilePath);
+			}
+		}
+		catch
+		{
+			File.WriteAllText(SettingsFilePath, "", Encoding.UTF8);
+		}
+	}
+
 	public static bool VerifyPin(string pin)
 	{
 		if (!HasPin())

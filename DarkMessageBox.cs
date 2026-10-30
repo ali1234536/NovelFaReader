@@ -147,7 +147,8 @@ namespace EpubReader
             return btn;
         }
 
-        public static MessageBoxResult Show(string text, string title = "", MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage icon = MessageBoxImage.None, bool showCloseX = false)
+        // متن + آیکن گرد کنار اون (مشترک بین Show و ShowChoice)
+        private static DockPanel MakeBody(string text, MessageBoxImage icon)
         {
             string glyph = null;
             Brush glyphBrush = Res("AccentColor");
@@ -200,6 +201,48 @@ namespace EpubReader
                 LineHeight = 22.0,
                 VerticalAlignment = VerticalAlignment.Center
             });
+            return body;
+        }
+
+        // پیام با دکمه‌های دلخواه: دکمه‌ی اول (اصلی) true برمی‌گردونه؛ دکمه‌ی دوم، Esc و بستن پنجره false.
+        // secondaryLabel خالی باشه فقط یک دکمه نشون داده می‌شه (مثلاً «بستن»).
+        public static bool ShowChoice(string text, string title, string primaryLabel, string secondaryLabel, MessageBoxImage icon = MessageBoxImage.None)
+        {
+            DockPanel body = MakeBody(text, icon);
+            StackPanel panel;
+            Window win = CreateShell(title, body, out panel);
+            bool chosen = false;
+            Button primary = AddButton(panel, primaryLabel, true);
+            primary.IsDefault = true;
+            primary.Click += (object s, RoutedEventArgs e) =>
+            {
+                chosen = true;
+                win.Close();
+            };
+            if (!string.IsNullOrEmpty(secondaryLabel))
+            {
+                Button secondary = AddButton(panel, secondaryLabel, false);
+                secondary.Click += (object s, RoutedEventArgs e) =>
+                {
+                    chosen = false;
+                    win.Close();
+                };
+            }
+            win.PreviewKeyDown += (object s, KeyEventArgs e) =>
+            {
+                if (e.Key == Key.Escape)
+                {
+                    chosen = string.IsNullOrEmpty(secondaryLabel);
+                    win.Close();
+                }
+            };
+            win.ShowDialog();
+            return chosen;
+        }
+
+        public static MessageBoxResult Show(string text, string title = "", MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage icon = MessageBoxImage.None, bool showCloseX = false)
+        {
+            DockPanel body = MakeBody(text, icon);
             StackPanel panel;
             Button closeX;
             Window win = CreateShell(title, body, out panel, showCloseX, out closeX);

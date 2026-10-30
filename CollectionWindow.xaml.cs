@@ -53,7 +53,7 @@ public partial class CollectionWindow : Window
 		Title = collectionName;
 		int done = books.Count((Book b) => b.IsCompleted);
 		int totalChapters = books.Sum((Book b) => b.TotalChapters);
-		txtCollectionStats.Text = Loc.F("{0} جلد  ·  {1} بخش  ·  {2} جلد تموم شده", books.Count, totalChapters, done);
+		txtCollectionStats.Text = Loc.F("{0} جلد  ·  {1} فصل  ·  {2} جلد تموم شده", books.Count, totalChapters, done);
 		txtCount.Text = "(" + books.Count + ")";
 		progressCollection.Value = ((books.Count > 0) ? books.Average((Book b) => b.ProgressPercent) : 0.0);
 		txtEmpty.Visibility = ((books.Count != 0) ? Visibility.Collapsed : Visibility.Visible);

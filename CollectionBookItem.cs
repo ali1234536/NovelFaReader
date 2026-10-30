@@ -17,9 +17,9 @@ public class CollectionBookItem
 		{
 			if (string.IsNullOrEmpty(Book.LastOpenedDate))
 			{
-				return Loc.FN("{0} بخش · شروع نشده", Book.TotalChapters, Book.TotalChapters);
+				return Loc.FN("{0} فصل · شروع نشده", Book.TotalChapters, Book.TotalChapters);
 			}
-			return Loc.F("بخش {0} از {1}", Book.LastChapterDisplay, Book.TotalChapters);
+			return Loc.F("فصل {0} از {1}", Book.LastChapterDisplay, Book.TotalChapters);
 		}
 	}
 

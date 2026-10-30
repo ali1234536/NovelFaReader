@@ -536,7 +536,18 @@ public sealed class CharacterThemeWindow : Window
 	{
 		RankInfo need = RankService.Get(t.RequiredRank);
 		int left = Math.Max(1, need.MinBooks - doneBooks);
-		ShowToast(Loc.FN("برای باز شدن «{0}» باید به رتبه‌ی «{1}» برسی؛ {2} کتاب دیگه تا آخر بخون.", left, t.Name, need.Name, left), true);
+		// دو قفل: رتبه‌ی قدیمی (کتاب تمام‌شده) «یا» عنوان XP؛ هر کدوم زودتر برسه تم باز می‌شه
+		int xpTitle = XpRank.XpTitleFor(t);
+		if (xpTitle < 99)
+		{
+			XpTitle target = XpRank.Titles[xpTitle];
+			int xpLeft = Math.Max(1, target.MinXp - XpStore.TotalXp);
+			ShowToast(Loc.FN("برای باز شدن «{0}»: {1} کتاب دیگه تا رتبه‌ی «{2}» بخون، یا به عنوان «{3}» برس ({4} XP دیگه).", left, t.Name, left, need.Name, target.Name, xpLeft), true);
+		}
+		else
+		{
+			ShowToast(Loc.FN("برای باز شدن «{0}» باید به رتبه‌ی «{1}» برسی؛ {2} کتاب دیگه تا آخر بخون.", left, t.Name, need.Name, left), true);
+		}
 
 		DoubleAnimationUsingKeyFrames anim = new DoubleAnimationUsingKeyFrames();
 		anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromTimeSpan(TimeSpan.Zero)));

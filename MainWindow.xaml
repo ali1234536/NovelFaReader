@@ -44,7 +44,7 @@
                                 <TextBlock Text="باز کردن فایل EPUB" Margin="8,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <TextBlock Text="فهرست بخش‌ها" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="0,26,0,8" />
+                        <TextBlock Text="فهرست فصل‌ها" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="0,26,0,8" />
                     </StackPanel>
                     <ListBox Name="listBoxChapters" Background="#00FFFFFF" BorderThickness="0" ItemContainerStyle="{StaticResource ChapterListItem}" ScrollViewer.CanContentScroll="False" SelectionChanged="listBoxChapters_SelectionChanged">
                         <Control.Template>
@@ -66,8 +66,8 @@
                 </Grid.RowDefinitions>
                 <DockPanel Name="TopBar" Grid.Row="0" Margin="0,0,0,18">
                     <StackPanel Name="ChapterTitleBar" DockPanel.Dock="Left" VerticalAlignment="Center" MaxWidth="240">
-                        <TextBlock Text="بخش فعلی" Foreground="{DynamicResource AccentColor}" FontSize="11" FontWeight="SemiBold" />
-                        <TextBlock Name="txtChapterTitle" TextTrimming="CharacterEllipsis" Text="بخشی انتخاب نشده" Foreground="{DynamicResource TextColor}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0" />
+                        <TextBlock Text="فصل فعلی" Foreground="{DynamicResource AccentColor}" FontSize="11" FontWeight="SemiBold" />
+                        <TextBlock Name="txtChapterTitle" TextTrimming="CharacterEllipsis" Text="فصلی انتخاب نشده" Foreground="{DynamicResource TextColor}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0" />
                     </StackPanel>
                     <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="14" Padding="10,6">
                         <WrapPanel Orientation="Horizontal">
@@ -100,6 +100,7 @@
                             <Button Name="btnFontDecrease" Content="A−" Width="32" Height="32" Padding="0" Background="#00FFFFFF" Click="btnFontDecrease_Click" />
                             <TextBox Name="txtFontSize" Text="18" Width="40" Height="26" MaxLength="2" Margin="2,0" Padding="0" FontSize="12" FontWeight="SemiBold" TextAlignment="Center" VerticalContentAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextColor}" CaretBrush="{DynamicResource TextColor}" Background="#00FFFFFF" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" ToolTip="سایز فونت (۱۰ تا ۷۲): عدد بنویس و Enter بزن" PreviewTextInput="txtFontSize_PreviewTextInput" PreviewKeyDown="txtFontSize_PreviewKeyDown" LostFocus="txtFontSize_LostFocus" />
                             <Button Name="btnFontIncrease" Content="A+" Width="32" Height="32" Padding="0" Background="#00FFFFFF" Click="btnFontIncrease_Click" />
+                            <TextBlock Name="txtFontNotice" Text="" Foreground="{DynamicResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <Button Name="btnSpacing" Width="32" Height="32" Padding="0" Margin="6,0,0,0" Background="#00FFFFFF" ToolTip="تنظیمات فاصله‌ها" Click="btnSpacing_Click">
                                 <Path Style="{StaticResource Ico}" Data="M5,3 H14 M5,8 H14 M5,13 H14 M2.5,4.5 V11.5 M1,6 L2.5,4.5 L4,6 M1,10 L2.5,11.5 L4,10" Stroke="{DynamicResource TextColor}" />
                             </Button>
@@ -211,7 +212,7 @@
                     <Button Name="btnPrevChapter" Grid.Column="0" HorizontalAlignment="Left" Padding="18,11" BorderBrush="{DynamicResource BorderColor}" Click="btnPrevChapter_Click">
                         <StackPanel Orientation="Horizontal">
                             <Path Style="{StaticResource Ico}" Data="{StaticResource IcoArrowBack}" />
-                            <TextBlock Text="بخش قبلی" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock Text="فصل قبلی" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                     <Border Grid.Column="1" Background="{DynamicResource BgCard}" CornerRadius="22" Padding="6" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" VerticalAlignment="Center">
@@ -227,7 +228,7 @@
                     </Border>
                     <Button Name="btnNextChapter" Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource ModernButton}" Padding="20,11" Click="btnNextChapter_Click">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="بخش بعدی" VerticalAlignment="Center" />
+                            <TextBlock Text="فصل بعدی" VerticalAlignment="Center" />
                             <Path Style="{StaticResource Ico}" Data="{StaticResource IcoArrowForward}" Margin="8,0,0,0" />
                         </StackPanel>
                     </Button>

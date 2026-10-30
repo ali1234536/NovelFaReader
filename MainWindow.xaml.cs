@@ -322,6 +322,8 @@ namespace EpubReader
             }
         }
 
+        private DispatcherTimer fontNoticeTimer;
+
         private const int MinFontSize = 10;
 
         private const int MaxFontSize = 72;
@@ -351,6 +353,7 @@ namespace EpubReader
                 MouseFx.Changed -= OnMouseFxChanged;
                 StopScrollWatcher();
                 StopSupportReminder();
+                CreditXp(xpTracker.Flush());
                 ShutdownWebView();
                 CleanupCurrentBook();
             };
@@ -437,6 +440,10 @@ namespace EpubReader
             {
                 CleanupCurrentBook();
                 currentLibraryBook = book;
+                pdfSource = BookConverter.PdfSourceFor(book.FilePath);
+                xpKey = null;
+                ResolveXpKeyAsync(book);
+                pdfShown = false;
                 currentBook = preloaded ?? EpubParser.Load(book.FilePath);
                 LibraryService.LogOpen("[Reader] loaded: " + book.FilePath + " | extract=" + currentBook.ExtractPath + " | chapters=" + currentBook.Chapters.Count + " | startIndex=" + book.LastChapterIndex);
                 if (!string.IsNullOrEmpty(currentBook.CoverImagePath))
@@ -543,10 +550,10 @@ namespace EpubReader
             return saved;
         }
 
-        private void btnOpen_Click(object sender, RoutedEventArgs e)
+        private async void btnOpen_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog openFileDialog = new OpenFileDialog();
-            openFileDialog.Filter = Loc.T("فایل\u200cهای EPUB (*.epub)") + "|*.epub";
+            openFileDialog.Filter = Loc.T("کتاب‌ها (EPUB، PDF، TXT، Markdown، DOCX، CBZ)") + "|" + BookConverter.DialogPatterns;
             openFileDialog.Title = Loc.T("انتخاب فایل EPUB");
             OpenFileDialog ofd = openFileDialog;
             if (ofd.ShowDialog() != true)
@@ -555,7 +562,9 @@ namespace EpubReader
             }
             try
             {
-                Book libraryBook = GetOrCreateLibraryBook(ofd.FileName);
+                string pickedFile = ofd.FileName;
+                string openPath = BookConverter.IsConvertible(pickedFile) ? await Task.Run(() => BookConverter.ConvertToEpub(pickedFile)) : pickedFile;
+                Book libraryBook = GetOrCreateLibraryBook(openPath);
                 LibraryService.MarkAsOpened(libraryBook.FilePath);
                 libraryBook.LastOpenedDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 OpenBook(libraryBook);
@@ -639,6 +648,60 @@ namespace EpubReader
             {
                 currentLibraryBook.LastChapterIndex = chapterIndex;
                 LibraryService.AddOrUpdateBook(currentLibraryBook);
+                int leftUnit = xpTracker.Enter(chapterIndex);
+                CreditXp(leftUnit);
+            }
+        }
+
+        // XP فصل‌ها: فقط فصلی که دیده شده، حداقل ۵ ثانیه توش مونده و ازش رفتی، یک‌بار XP می‌ده (کتاب خصوصی XP نمی‌ده)
+        private readonly XpSessionTracker xpTracker = new XpSessionTracker();
+
+        // کلید XP کتاب: هش محتوای فایل (تا حذف و افزودن دوباره‌ی کتاب XP تازه نده). تا حاضر شدن هش، Id خود کتاب استفاده می‌شه و بعدش ورودی‌ش منتقل می‌شه
+        private string xpKey;
+
+        private async void ResolveXpKeyAsync(Book book)
+        {
+            if (book == null || string.IsNullOrEmpty(book.FilePath))
+            {
+                return;
+            }
+            string path = book.FilePath;
+            string id = book.Id;
+            try
+            {
+                string hash = await Task.Run(() => ReadingRecordStore.Sha256OfFile(path));
+                if (currentLibraryBook == null || currentLibraryBook.Id != id)
+                {
+                    return;
+                }
+                string key = XpLedger.ContentKeyFor(hash);
+                XpStore.TransferLedger(id, key);
+                xpKey = key;
+            }
+            catch
+            {
+                // هش نشد: کتاب با Id کار می‌کنه
+            }
+        }
+
+        private void CreditXp(int unit)
+        {
+            if (unit < 0 || currentBook == null || currentLibraryBook == null || unit >= currentBook.Chapters.Count)
+            {
+                return;
+            }
+            try
+            {
+                string html;
+                using (StreamReader reader = new StreamReader(currentBook.Chapters[unit].FilePath, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+                {
+                    html = reader.ReadToEnd();
+                }
+                XpStore.CreditUnit(xpKey ?? currentLibraryBook.Id, unit, XpRank.WordsFromHtml(html), currentBook.Chapters.Count, currentLibraryBook.IsPrivate);
+            }
+            catch
+            {
+                // ثبت XP هیچ‌وقت نباید خوندن رو خراب کنه
             }
         }
 
@@ -666,7 +729,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در نمایش بخش:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در نمایش فصل:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
         }
 
@@ -705,6 +768,7 @@ namespace EpubReader
             sb.Append("var cc=e.ctrlKey?1:0,ss=e.shiftKey?1:0,aa=e.altKey?1:0;");
             sb.Append("if(window.__rdrKeys&&window.__rdrKeys[k+':'+cc+ss+aa]){e.preventDefault();post('c|'+k+'|'+cc+'|'+ss+'|'+aa);}");
             sb.Append("},true);");
+            sb.Append("document.addEventListener('contextmenu',function(e){var t=e.target;if(t&&t.tagName=='IMG'&&t.src){e.preventDefault();post('i|'+encodeURIComponent(t.src));}},true);");
             sb.Append("var lt=-1,lh=-1,lc=-1,lr=-1;");
             sb.Append("function r(){try{var d=document.documentElement,b=document.body;var t=Math.round(Math.max(d.scrollTop||0,b.scrollTop||0)),h=Math.max(d.scrollHeight||0,b.scrollHeight||0),c=d.clientHeight||b.clientHeight||0;");
             sb.Append("if(t!=lt||h!=lh||c!=lc){lt=t;lh=h;lc=c;post('s|'+t+'|'+h+'|'+c);}else if(h>c){lr=t/(h-c);}}catch(x){}}");
@@ -1316,16 +1380,39 @@ namespace EpubReader
             }
         }
 
+        // وقتی سایز به کف یا سقف می‌رسه، به‌جای بی‌صدا موندن روی همان عدد، حد مجاز رو
+        // چند ثانیه کنار دکمه‌های سایز نشون می‌ده (هم‌ارز پیام اندروید)
+        private void ShowFontLimitNotice(bool isMin)
+        {
+            txtFontNotice.Text = isMin
+                ? Loc.F("کمترین سایز فونت مجاز {0} است", MinFontSize)
+                : Loc.F("بیشترین سایز فونت مجاز {0} است", MaxFontSize);
+            if (fontNoticeTimer == null)
+            {
+                fontNoticeTimer = new DispatcherTimer();
+                fontNoticeTimer.Interval = TimeSpan.FromSeconds(3.0);
+                fontNoticeTimer.Tick += (object s, EventArgs e) =>
+                {
+                    fontNoticeTimer.Stop();
+                    txtFontNotice.Text = "";
+                };
+            }
+            fontNoticeTimer.Stop();
+            fontNoticeTimer.Start();
+        }
+
         // سایز فونت رو (بین حداقل و حداکثر) اعمال و ذخیره می‌کنه
         private void ApplyFontSize(int size)
         {
             if (size < MinFontSize)
             {
                 size = MinFontSize;
+                ShowFontLimitNotice(true);
             }
             if (size > MaxFontSize)
             {
                 size = MaxFontSize;
+                ShowFontLimitNotice(false);
             }
             txtFontSize.Text = size.ToString();
             if (size == currentFontSize)
@@ -1993,7 +2080,9 @@ namespace EpubReader
             }
             try
             {
-                string checkScript = "(function(){if(window.__rdrGen!==" + docGen + ")return 'x';var d=document.documentElement,b=document.body;var st=Math.max(d.scrollTop||0,b.scrollTop||0);var sh=Math.max(d.scrollHeight||0,b.scrollHeight||0);var ch=d.clientHeight||window.innerHeight;var idx=-1;var cs=b.getElementsByTagName('div');for(var i=0;i<cs.length;i++){if(cs[i].className=='rdr-chap'&&cs[i].offsetTop<=st+ch/3){idx=parseInt(cs[i].getAttribute('data-idx'),10);}}return (((st+ch)>=(sh-300))?'1':'0')+'|'+((st<=300)?'1':'0')+'|'+idx;})();";
+                // آستانه‌ی چسباندن فصل بعد: ۱۲۰۰ پیکسل مانده به ته (هم‌ارز اندروید) تا فصل
+                // قبل از رسیدن کاربر به ته صفحه آماده باشد، نه بعد از آن.
+                string checkScript = "(function(){if(window.__rdrGen!==" + docGen + ")return 'x';var d=document.documentElement,b=document.body;var st=Math.max(d.scrollTop||0,b.scrollTop||0);var sh=Math.max(d.scrollHeight||0,b.scrollHeight||0);var ch=d.clientHeight||window.innerHeight;var idx=-1;var cs=b.getElementsByTagName('div');for(var i=0;i<cs.length;i++){if(cs[i].className=='rdr-chap'&&cs[i].offsetTop<=st+ch/3){idx=parseInt(cs[i].getAttribute('data-idx'),10);}}return (((st+ch)>=(sh-1200))?'1':'0')+'|'+((st<=300)?'1':'0')+'|'+idx;})();";
                 string text = JsonToString(await RunScriptAsync(checkScript));
                 if (string.IsNullOrEmpty(text) || text == "x")
                 {
@@ -2069,6 +2158,20 @@ namespace EpubReader
             return PrepareChapterBody(html, Path.GetDirectoryName(chapter.FilePath));
         }
 
+        // خوندن فایل فصل از دیسک روی نخ پس‌زمینه انجام می‌شه تا موقع اسکرول لگ نیفته؛ آماده‌سازی HTML روی نخ رابط می‌مونه
+        private async Task<string> ReadChapterBodyAsync(ChapterItem chapter)
+        {
+            string path = chapter.FilePath;
+            string html = await Task.Run(() =>
+            {
+                using (StreamReader reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+                {
+                    return reader.ReadToEnd();
+                }
+            });
+            return PrepareChapterBody(html, Path.GetDirectoryName(path));
+        }
+
         private async void AppendNextChapter()
         {
             if (currentBook == null)
@@ -2088,7 +2191,7 @@ namespace EpubReader
             try
             {
                 ChapterItem nextChapter = currentBook.Chapters[nextIndex];
-                string bodyContent = ReadChapterBody(nextChapter);
+                string bodyContent = await ReadChapterBodyAsync(nextChapter);
                 string chunk = "<div class=\"rdr-chap\" data-idx=\"" + nextIndex + "\"" + ChapterDirAttr(bodyContent) + ">" + BuildChapterDivider(nextChapter.Title) + bodyContent + "</div>";
                 string jsAppend = "(function(){if(window.__rdrGen!==" + docGen + ")return 0;document.body.insertAdjacentHTML('beforeend', '" + EscapeForJs(chunk) + "');return 1;})();";
                 string result = await RunScriptAsync(jsAppend);
@@ -2099,7 +2202,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در بارگذاری بخش بعدی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در بارگذاری فصل بعدی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
             finally
             {
@@ -2128,7 +2231,7 @@ namespace EpubReader
             {
                 ChapterItem prevChapter = currentBook.Chapters[prevIndex];
                 ChapterItem followingChapter = currentBook.Chapters[contFirst];
-                string bodyContent = ReadChapterBody(prevChapter);
+                string bodyContent = await ReadChapterBodyAsync(prevChapter);
                 string chunk = "<div class=\"rdr-chap\" data-idx=\"" + prevIndex + "\"" + ChapterDirAttr(bodyContent) + ">" + bodyContent + "</div>";
                 string divider = BuildChapterDivider(followingChapter.Title);
                 string js = "(function(){if(window.__rdrGen!==" + docGen + ")return 0;"
@@ -2156,7 +2259,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در بارگذاری بخش قبلی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در بارگذاری فصل قبلی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
             finally
             {
@@ -2169,6 +2272,11 @@ namespace EpubReader
         private bool webViewInitStarted = false;
 
         private bool navAllowed = false;
+
+        // اگه کتاب باز‌شده در اصل PDF باشه، مسیر PDF اصلی که با نمایشگر خود PDF نشون داده می‌شه
+        private string pdfSource;
+
+        private bool pdfShown;
 
         private string pagesFolder;
 
@@ -2184,7 +2292,7 @@ namespace EpubReader
         {
             Loaded += (object s, RoutedEventArgs e) =>
             {
-                if (currentPageFile != null && webBrowser1.CoreWebView2 == null)
+                if ((currentPageFile != null || pdfSource != null) && webBrowser1.CoreWebView2 == null)
                 {
                     StartWebViewInit();
                 }
@@ -2199,6 +2307,24 @@ namespace EpubReader
         {
             try
             {
+                if (pdfSource != null)
+                {
+                    if (pdfShown && webBrowser1.CoreWebView2 != null)
+                    {
+                        return;
+                    }
+                    pdfShown = true;
+                    if (webBrowser1.CoreWebView2 != null)
+                    {
+                        NavigateToCurrentPage();
+                    }
+                    else
+                    {
+                        webBrowser1.Visibility = Visibility.Hidden;
+                        StartWebViewInit();
+                    }
+                    return;
+                }
                 if (pagesFolder == null)
                 {
                     pagesFolder = Path.Combine(Path.GetTempPath(), "EpubReaderApp_pages", Guid.NewGuid().ToString("N"));
@@ -2224,17 +2350,22 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در نمایش بخش:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در نمایش فصل:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
         }
 
         private void NavigateToCurrentPage()
         {
-            if (currentPageFile == null || webBrowser1.CoreWebView2 == null)
+            if (webBrowser1.CoreWebView2 == null || (currentPageFile == null && pdfSource == null))
             {
                 return;
             }
             navAllowed = true;
+            if (pdfSource != null)
+            {
+                webBrowser1.CoreWebView2.Navigate(new Uri(pdfSource).AbsoluteUri + "#view=FitH");
+                return;
+            }
             webBrowser1.CoreWebView2.Navigate(new Uri(currentPageFile).AbsoluteUri);
         }
 
@@ -2331,6 +2462,15 @@ namespace EpubReader
                 return;
             }
             string uri = e.Uri ?? "";
+            if (pdfSource != null)
+            {
+                // نمایشگر PDF داخلش چند فریم درونی می‌سازه؛ فقط لینک‌های اینترنتی بلاک می‌شن
+                if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    e.Cancel = true;
+                }
+                return;
+            }
             int hash = uri.IndexOf('#');
             string withoutHash = (hash >= 0) ? uri.Substring(0, hash) : uri;
             try
@@ -2408,6 +2548,70 @@ namespace EpubReader
                         HandleBrowserCombo(a, p[2] == "1", p[3] == "1", p[4] == "1");
                     }
                     break;
+                case "i":
+                    if (p.Length == 2)
+                    {
+                        SaveReaderImage(p[1]);
+                    }
+                    break;
+            }
+        }
+
+        // راست‌کلیک روی عکس کتاب: ذخیره‌ی یه کپی از عکس (خود کتاب دست‌نخورده می‌مونه)
+        private void SaveReaderImage(string encodedSrc)
+        {
+            try
+            {
+                string src = Uri.UnescapeDataString(encodedSrc ?? "");
+                byte[] bytes = null;
+                string ext = "png";
+                string baseName = "image";
+                if (src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                {
+                    int comma = src.IndexOf(',');
+                    int semi = src.IndexOf(';');
+                    if (comma < 0 || semi < 0 || semi > comma || src.IndexOf("base64", StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        return;
+                    }
+                    string mime = src.Substring(5, semi - 5).ToLowerInvariant();
+                    ext = mime == "image/jpeg" ? "jpg" : (mime.StartsWith("image/", StringComparison.Ordinal) ? mime.Substring(6).Replace("svg+xml", "svg") : "png");
+                    bytes = Convert.FromBase64String(src.Substring(comma + 1));
+                }
+                else if (src.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string local = new Uri(src).LocalPath;
+                    string root = currentBook != null ? currentBook.ExtractPath : null;
+                    if (root == null || !File.Exists(local) || !Path.GetFullPath(local).StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+                    ext = Path.GetExtension(local).TrimStart('.').ToLowerInvariant();
+                    if (Array.IndexOf(new string[] { "jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "avif" }, ext) < 0)
+                    {
+                        return;
+                    }
+                    baseName = Path.GetFileNameWithoutExtension(local);
+                    bytes = File.ReadAllBytes(local);
+                }
+                else
+                {
+                    return;
+                }
+                SaveFileDialog dlg = new SaveFileDialog();
+                dlg.Title = Loc.T("ذخیره‌ی عکس");
+                dlg.Filter = Loc.T("عکس") + " (*." + ext + ")|*." + ext;
+                dlg.FileName = baseName + "." + ext;
+                dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+                if (dlg.ShowDialog(this) == true)
+                {
+                    File.WriteAllBytes(dlg.FileName, bytes);
+                    DarkMessageBox.Show(Loc.T("عکس ذخیره شد."), Loc.T("ذخیره‌ی عکس"), MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                DarkMessageBox.Show(Loc.T("ذخیره‌ی عکس انجام نشد.") + "\n" + ex.Message, Loc.T("ذخیره‌ی عکس"), MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

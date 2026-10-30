@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 
 namespace EpubReader.Services
 {
@@ -92,7 +94,18 @@ namespace EpubReader.Services
         // تم یا با رتبه باز شده، یا با راز مخفیِ خودش
         public static bool IsUnlocked(CharacterTheme theme)
         {
-            return theme != null && (IsRankUnlocked(theme.RequiredRank) || IsSecretUnlocked(theme.Id));
+            return theme != null && (IsRankUnlocked(theme.RequiredRank) || IsXpUnlocked(theme) || IsSecretUnlocked(theme.Id));
+        }
+
+        // قفل دوم: عنوان XP (تم با رتبه‌ی قدیمی «یا» عنوان XP باز می‌شه)
+        public static bool IsXpUnlocked(CharacterTheme theme)
+        {
+            if (theme == null)
+            {
+                return false;
+            }
+            int need = XpRank.XpTitleFor(theme);
+            return need < 99 && XpRank.LevelFor(XpStore.TotalXp).TitleIndex >= need;
         }
 
         // فقط با رتبه باز شده (نه با راز مخفی)
@@ -130,6 +143,66 @@ namespace EpubReader.Services
             }
             string old = AppSettings.Get(SecretKey, "");
             AppSettings.Set(SecretKey, old.Length == 0 ? themeId : old + "," + themeId);
+        }
+
+        // لیست id تم‌هایی که با راز مخفی باز شدن
+        public static List<string> SecretThemeIds()
+        {
+            List<string> list = new List<string>();
+            foreach (string id in AppSettings.Get(SecretKey, "").Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string t = id.Trim();
+                if (t.Length > 0 && !list.Contains(t))
+                {
+                    list.Add(t);
+                }
+            }
+            return list;
+        }
+
+        // اجتماع رازهای فعلی با لیست داده‌شده (بدون تکراری، با همون فرمت CSV). تعداد idهای تازه رو برمی‌گردونه
+        public static int MergeSecretThemes(IEnumerable<string> ids)
+        {
+            List<string> current = SecretThemeIds();
+            int added = 0;
+            foreach (string id in ids)
+            {
+                string t = (id ?? "").Trim();
+                if (t.Length > 0 && t.IndexOf(',') < 0 && !current.Contains(t))
+                {
+                    current.Add(t);
+                    added++;
+                }
+            }
+            if (added > 0)
+            {
+                AppSettings.Set(SecretKey, string.Join(",", current.ToArray()));
+            }
+            return added;
+        }
+
+        // ---------- «کف» کتاب‌های تمام‌شده (FinishedBooksRestored) ----------
+        // روی دستگاه تازه کتابخونه خالیه و شمارش زنده صفره. بازیابی بکاپ تعداد کتاب‌های بکاپ رو روی رکورد فعلی جمع می‌زنه
+        // و نتیجه اینجا ذخیره می‌شه. تعداد مؤثرِ کتاب تمام‌شده (ورودی رنک و رکورد) = max(شمارش کتابخونه, کف).
+        private const string FloorKey = "FinishedBooksRestored";
+
+        public static int FinishedFloor
+        {
+            get
+            {
+                int v;
+                if (int.TryParse(AppSettings.Get(FloorKey, "0"), NumberStyles.Integer, CultureInfo.InvariantCulture, out v) && v > 0)
+                {
+                    return v;
+                }
+                return 0;
+            }
+            set { AppSettings.Set(FloorKey, Math.Max(0, value).ToString(CultureInfo.InvariantCulture)); }
+        }
+
+        public static int Effective(int libraryFinished)
+        {
+            return Math.Max(libraryFinished, FinishedFloor);
         }
 
         public static int UnlockedCount()

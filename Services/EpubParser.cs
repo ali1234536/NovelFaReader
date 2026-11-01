@@ -126,7 +126,7 @@ public static class EpubParser
 				string fullPath = ResolveHref(opfFolder, href);
 				book.Chapters.Add(new ChapterItem
 				{
-					Title = Loc.F("فصل {0}", index),
+					Title = Loc.F("بخش {0}", index),
 					FilePath = fullPath
 				});
 				index++;

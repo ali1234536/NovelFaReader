@@ -8,7 +8,7 @@ using System.Text;
 namespace EpubReader.Services
 {
 
-// تبدیل TXT، Markdown و DOCX به یک فایل EPUB واقعی؛ بعدش مثل هر EPUB دیگه‌ای وارد کتابخونه می‌شه
+// تبدیل TXT، Markdown و DOCX به یک فایل کتاب واقعی؛ بعدش مثل هر EPUB دیگه‌ای وارد کتابخونه می‌شه
 // (خوندن، پیشرفت و بکاپ بدون هیچ تغییری کار می‌کنن). فایل تبدیل‌شده توی پوشه‌ی Converted کنار تنظیمات برنامه می‌مونه.
 public static class BookConverter
 {
@@ -87,24 +87,24 @@ public static class BookConverter
 	{
 		string target = TargetPathFor(sourcePath);
 		bool isPdf = string.Equals(Path.GetExtension(sourcePath), ".pdf", StringComparison.OrdinalIgnoreCase);
-		if (File.Exists(target) && File.GetLastWriteTimeUtc(target) >= File.GetLastWriteTimeUtc(sourcePath) && (!isPdf || File.Exists(target + ".src")))
+		string srcExt = Path.GetExtension(sourcePath).ToLowerInvariant();
+		bool isComic = srcExt == ".cbz" || srcExt == ".zip";
+		string docKind = DocKindOfExtension(srcExt);
+		if (File.Exists(target) && File.GetLastWriteTimeUtc(target) >= File.GetLastWriteTimeUtc(sourcePath) && (!isPdf || File.Exists(target + ".pdfv3")) && (!isComic || File.Exists(target + ".comicv1")) && (docKind == null || File.Exists(target + ".dockind")))
 		{
-			if (isPdf)
-			{
-				WritePdfSidecar(target, sourcePath);
-			}
 			return target;
 		}
 		string work = Path.Combine(Path.GetTempPath(), "EpubConv_" + Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(work);
 		try
 		{
-			Func<int, string> fallback = (int i) => Loc.F("فصل {0}", i);
+			Func<int, string> fallback = (int i) => Loc.F("بخش {0}", i);
 			string ext = Path.GetExtension(sourcePath).ToLowerInvariant();
 			ParsedBook parsed;
+			bool pdfViewer = false;
 			if (ext == ".pdf")
 			{
-				parsed = PdfPlaceholder(sourcePath, work);
+				parsed = ParsePdfOrViewer(sourcePath, work, fallback, out pdfViewer);
 			}
 			else if (ext == ".cbz" || ext == ".zip")
 			{
@@ -139,7 +139,27 @@ public static class BookConverter
 			File.Move(temp, target);
 			if (isPdf)
 			{
-				WritePdfSidecar(target, sourcePath);
+				WritePdfSidecar(target, sourcePath, pdfViewer);
+			}
+			if (docKind != null)
+			{
+				try
+				{
+					File.WriteAllText(target + ".dockind", docKind, new UTF8Encoding(false));
+				}
+				catch
+				{
+				}
+			}
+			if (isComic)
+			{
+				try
+				{
+					File.WriteAllText(target + ".comicv1", "comic", new UTF8Encoding(false));
+				}
+				catch
+				{
+				}
 			}
 			return target;
 		}
@@ -156,7 +176,7 @@ public static class BookConverter
 	}
 
 	// PDF با نمایشگر خود PDF (WebView2) نشون داده می‌شه تا ظاهر اصلیش (فونت، فارسی، جدول، عکس) سالم بمونه.
-	// توی کتابخونه یه کتاب EPUB خیلی کوچیک (یک فصل) ثبت می‌شه و کنارش یه فایل «.src» مسیر PDF اصلی رو نگه می‌داره
+	// توی کتابخونه یه کتاب EPUB خیلی کوچیک (یک بخش) ثبت می‌شه و کنارش یه فایل «.src» مسیر PDF اصلی رو نگه می‌داره
 	private static ParsedBook PdfPlaceholder(string sourcePath, string work)
 	{
 		string title = TextBookParser.NameWithoutExtension(Path.GetFileName(sourcePath));
@@ -165,14 +185,96 @@ public static class BookConverter
 		return ConvertedBook.Write(work, title, sections);
 	}
 
-	private static void WritePdfSidecar(string epubPath, string pdfPath)
+	// PDFِ متن‌دار مثل یه کتاب معمولی (با تم، فونت و بخش‌های برنامه) خونده می‌شه؛ فقط اگه متن قابل‌خوندن نداشت (اسکن‌شده، خراب) نمایشگر خود PDF جاش می‌شینه
+	private static ParsedBook ParsePdfOrViewer(string sourcePath, string work, Func<int, string> fallback, out bool viewer)
+	{
+		// همه‌ی PDFها با نمایشگر اختصاصی PDF خود برنامه (pdf.js) باز می‌شن: ظاهر اصلی فایل حفظ می‌شه و تبدیل هم لازم نیست
+		viewer = true;
+		return PdfPlaceholder(sourcePath, work);
+	}
+
+	// نشونه‌ی «تبدیل نسخه‌ی جدید» + (اگه نمایشگر PDF لازمه) مسیر PDF اصلی
+	private static void WritePdfSidecar(string epubPath, string pdfPath, bool viewer)
 	{
 		try
 		{
-			File.WriteAllText(epubPath + ".src", Path.GetFullPath(pdfPath), new UTF8Encoding(false));
+			File.WriteAllText(epubPath + ".pdfv3", viewer ? Path.GetFullPath(pdfPath) : "text", new UTF8Encoding(false));
 		}
 		catch
 		{
+		}
+	}
+
+	// TXT / Markdown / DOCX → فایل‌های HTML بخش‌ها توی پوشه‌ی کار (بدون ساختن EPUB)؛ فقط برای نمایشگر اختصاصی
+	public static ParsedBook ParseDocument(string sourcePath, string work)
+	{
+		Func<int, string> fallback = (int i) => Loc.F("بخش {0}", i);
+		string ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+		ParsedBook parsed;
+		if (ext == ".docx")
+		{
+			parsed = DocxParser.ParseFile(sourcePath, work, fallback, Path.GetFileName(sourcePath));
+		}
+		else if (ext == ".md" || ext == ".markdown" || ext == ".mdown")
+		{
+			parsed = TextBookParser.ParseMarkdown(File.ReadAllBytes(sourcePath), Path.GetFileName(sourcePath), work, fallback);
+		}
+		else
+		{
+			parsed = TextBookParser.ParseText(File.ReadAllBytes(sourcePath), Path.GetFileName(sourcePath), work, fallback);
+		}
+		if (parsed.Chapters.Count == 0)
+		{
+			throw new InvalidDataException(Loc.T("این فایل متن قابل‌خوندن نداره."));
+		}
+		return parsed;
+	}
+
+	private static string DocKindOfExtension(string ext)
+	{
+		switch (ext)
+		{
+			case ".txt":
+			case ".text":
+				return "txt";
+			case ".md":
+			case ".markdown":
+			case ".mdown":
+				return "md";
+			case ".docx":
+				return "docx";
+		}
+		return null;
+	}
+
+	// TXT / Markdown / DOCX با نمایشگر اختصاصی همون نوع باز می‌شن: «txt» | «md» | «docx» (یا null)
+	public static string DocKindFor(string epubPath)
+	{
+		try
+		{
+			if (string.IsNullOrEmpty(epubPath) || !File.Exists(epubPath + ".dockind"))
+			{
+				return null;
+			}
+			string k = File.ReadAllText(epubPath + ".dockind", Encoding.UTF8).Trim();
+			return (k == "txt" || k == "md" || k == "docx") ? k : null;
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	// کتاب‌های CBZ/ZIP تصویری با نمایشگر کمیک اختصاصی باز می‌شن (EPUB تبدیل‌شده فقط منبع عکس‌هاست)
+	public static bool IsComicBook(string epubPath)
+	{
+		try
+		{
+			return !string.IsNullOrEmpty(epubPath) && File.Exists(epubPath + ".comicv1");
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
@@ -181,7 +283,7 @@ public static class BookConverter
 	{
 		try
 		{
-			string side = epubPath + ".src";
+			string side = epubPath + ".pdfv3";
 			if (!File.Exists(side))
 			{
 				return null;
@@ -291,7 +393,7 @@ public static class BookConverter
 		}
 	}
 
-	// پوشه‌ی فصل‌ها (+ media/) رو به یک EPUB معتبر بسته‌بندی می‌کنه
+	// پوشه‌ی بخش‌ها (+ media/) رو به یک EPUB معتبر بسته‌بندی می‌کنه
 	private static void PackEpub(string epubPath, ParsedBook parsed, string workDir, string sourceFullPath)
 	{
 		string uid = "urn:uuid:" + new Guid(MD5.Create().ComputeHash(Encoding.UTF8.GetBytes(sourceFullPath.ToLowerInvariant()))).ToString();
@@ -342,7 +444,7 @@ public static class BookConverter
 				zip.CreateEntryFromFile(ch.File, "OEBPS/" + Path.GetFileName(ch.File), CompressionLevel.Optimal);
 			}
 
-			// تصویرهای DOCX (media/…) کنار فصل‌ها؛ توی manifest نمیان تا اولین عکس به‌اشتباه جلد کتاب نشه
+			// تصویرهای DOCX (media/…) کنار بخش‌ها؛ توی manifest نمیان تا اولین عکس به‌اشتباه جلد کتاب نشه
 			string mediaDir = Path.Combine(workDir, "media");
 			if (Directory.Exists(mediaDir))
 			{

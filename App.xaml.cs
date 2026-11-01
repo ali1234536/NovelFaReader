@@ -16,7 +16,7 @@ namespace EpubReader
     {
         private static bool showingError = false;
 
-        // فایل EPUB ای که از بیرون (دابل‌کلیک / Open with در ویندوز) به برنامه داده شده
+        // فایل کتاب ای که از بیرون (دابل‌کلیک / Open with در ویندوز) به برنامه داده شده
         public static string StartupFile;
 
         protected override void OnStartup(StartupEventArgs e)

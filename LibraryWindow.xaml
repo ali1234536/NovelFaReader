@@ -503,7 +503,7 @@
                         <TextBlock Name="txtSectionTitle" Text="کتاب‌های من" Foreground="{DynamicResource TextColor}" FontSize="19" FontWeight="Bold" />
                         <TextBlock Name="txtSectionCount" Text="" Foreground="{DynamicResource TextMuted}" FontSize="12" VerticalAlignment="Center" Margin="10,2,0,0" />
                     </DockPanel>
-                    <TextBlock Name="txtEmpty" Text="اینجا هنوز کتابی نیست&#10;فایل‌های EPUB رو بکش و اینجا رها کن" TextAlignment="Center" LineHeight="26" Foreground="{DynamicResource TextMuted}" FontSize="14" HorizontalAlignment="Center" Margin="0,60,0,0" Visibility="Collapsed" />
+                    <TextBlock Name="txtEmpty" Text="اینجا هنوز کتابی نیست&#10;فایل‌های کتاب رو بکش و اینجا رها کن" TextAlignment="Center" LineHeight="26" Foreground="{DynamicResource TextMuted}" FontSize="14" HorizontalAlignment="Center" Margin="0,60,0,0" Visibility="Collapsed" />
                     <Border Name="selBar" Visibility="Collapsed" CornerRadius="12" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentColor}" BorderThickness="1" Padding="14,8" Margin="0,0,0,12">
                         <DockPanel LastChildFill="True">
                             <Button Name="btnSelCancel" DockPanel.Dock="Right" Content="لغو" Padding="12,4" Margin="8,0,0,0" Cursor="Hand" Click="btnSelCancel_Click" />
@@ -669,7 +669,7 @@
                     <TextBlock Text="مجموعه‌ها" Foreground="{DynamicResource TextColor}" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
                     <TextBlock Name="txtCollectionsTotal" Text="" Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="12,4,0,0" VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBlock Grid.Row="1" Text="خودت مجموعه بساز، یه اسم دلخواه بهش بده و فایل‌های EPUB رو توش بذار." Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,6,0,12" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="1" Text="خودت مجموعه بساز، یه اسم دلخواه بهش بده و فایل‌های کتاب رو توش بذار." Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,6,0,12" TextWrapping="Wrap" />
                 <WrapPanel Grid.Row="2" Margin="0,0,0,12">
                     <Button Name="btnCollectionNew" Style="{StaticResource ModernButton}" Padding="16,9" Click="btnCollectionNew_Click">
                         <StackPanel Orientation="Horizontal">
@@ -694,7 +694,7 @@
                         </Path.LayoutTransform>
                     </Path>
                 </Border>
-                <TextBlock Text="فایل‌های EPUB رو اینجا رها کن" Foreground="{DynamicResource TextColor}" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,22,0,0" />
+                <TextBlock Text="فایل‌های کتاب رو اینجا رها کن" Foreground="{DynamicResource TextColor}" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,22,0,0" />
                 <TextBlock Text="می‌تونی چند کتاب یا یه پوشه رو هم‌زمان بندازی" Foreground="{DynamicResource TextMuted}" FontSize="13" HorizontalAlignment="Center" Margin="0,8,0,0" />
             </StackPanel>
         </Grid>

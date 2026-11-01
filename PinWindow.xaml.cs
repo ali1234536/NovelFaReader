@@ -158,7 +158,7 @@ public partial class PinWindow : Window
 	// فراموشی پین: تنها راه برگشت، حذف همه‌ی کتاب‌های خصوصی از کتابخونه و پاک کردن پینه (بدون پین، قفل دور زده نمی‌شه)
 	private void btnForgot_Click(object sender, RoutedEventArgs e)
 	{
-		MessageBoxResult ask = DarkMessageBox.Show(Loc.T("این کار همه‌ی کتاب‌های خصوصی رو برای همیشه از کتابخونه حذف می‌کنه و برگشت‌پذیر نیست. این یه محافظت امنیتیه: بدون پین نمی‌شه کتاب‌های خصوصی رو باز کرد و برای اینکه قفل دور زده نشه، تنها راه برگشت حذف اوناست (خود فایل‌های EPUB پاک نمی‌شن). ادامه بدیم؟"), Loc.T("فراموشی پین"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
+		MessageBoxResult ask = DarkMessageBox.Show(Loc.T("این کار همه‌ی کتاب‌های خصوصی رو برای همیشه از کتابخونه حذف می‌کنه و برگشت‌پذیر نیست. این یه محافظت امنیتیه: بدون پین نمی‌شه کتاب‌های خصوصی رو باز کرد و برای اینکه قفل دور زده نشه، تنها راه برگشت حذف اوناست (خود فایل‌های کتاب پاک نمی‌شن). ادامه بدیم؟"), Loc.T("فراموشی پین"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
 		if (ask != MessageBoxResult.Yes)
 		{
 			return;

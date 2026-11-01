@@ -533,7 +533,7 @@ namespace EpubReader
             }
         }
 
-        // اگه برنامه با یه فایل EPUB باز شده (دابل‌کلیک توی ویندوز)، همون فایل رو باز می‌کنه
+        // اگه برنامه با یه فایل کتاب باز شده (دابل‌کلیک توی ویندوز)، همون فایل رو باز می‌کنه
         private void OpenStartupFile()
         {
             string path = App.StartupFile;
@@ -541,7 +541,7 @@ namespace EpubReader
             OpenExternalFile(path);
         }
 
-        // فایل EPUB رو (اگه توی کتابخونه نیست اضافه می‌کنه) و باز می‌کنه
+        // فایل کتاب رو (اگه توی کتابخونه نیست اضافه می‌کنه) و باز می‌کنه
         public async void OpenExternalFile(string path)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
@@ -550,12 +550,11 @@ namespace EpubReader
             }
             try
             {
-                bool convertible = BookConverter.IsConvertible(path);
-                string libPath = convertible ? BookConverter.TargetPathFor(path) : path;
+                string libPath = path;
                 Book target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, libPath, StringComparison.OrdinalIgnoreCase));
                 if (target == null)
                 {
-                    Book importedBook = await Task.Run(() => ImportEpub(convertible ? BookConverter.ConvertToEpub(path) : path));
+                    Book importedBook = await Task.Run(() => ImportEpub(path));
                     LibraryService.AddOrUpdateBook(importedBook);
                     LoadLibrary();
                     target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, libPath, StringComparison.OrdinalIgnoreCase));
@@ -620,7 +619,7 @@ namespace EpubReader
             txtHeroTitle.Text = heroBook.DisplayTitle;
             txtHeroTitle.FlowDirection = Loc.Flow;
             Loc.FixTextDirection(txtHeroTitle);
-            txtHeroChapter.Text = Loc.F("فصل {0} از {1}", heroBook.LastChapterDisplay, heroBook.TotalChapters);
+            txtHeroChapter.Text = Loc.F("بخش {0} از {1}", heroBook.LastChapterDisplay, heroBook.TotalChapters);
             progressHero.BeginAnimation(RangeBase.ValueProperty, null);
             progressHero.SetResourceReference(Control.ForegroundProperty, heroBook.IsCompleted ? "SuccessColor" : "AccentColor");
             progressHero.Value = heroBook.ProgressPercent;
@@ -906,12 +905,12 @@ namespace EpubReader
 
         private LibraryCardItem BuildSingleCard(Book b)
         {
-            string progress = (string.IsNullOrEmpty(b.LastOpenedDate) ? Loc.FN("{0} فصل · شروع نشده", b.TotalChapters, b.TotalChapters) : Loc.F("فصل {0} از {1}", b.LastChapterDisplay, b.TotalChapters));
+            string progress = (string.IsNullOrEmpty(b.LastOpenedDate) ? Loc.FN("{0} بخش · شروع نشده", b.TotalChapters, b.TotalChapters) : Loc.F("بخش {0} از {1}", b.LastChapterDisplay, b.TotalChapters));
             LibraryCardItem libraryCardItem = new LibraryCardItem();
             libraryCardItem.IsCollection = false;
             libraryCardItem.Title = b.DisplayTitle;
             libraryCardItem.CoverImagePath = b.CoverImagePath;
-            libraryCardItem.SubtitleText = Loc.FN("{0} فصل", b.TotalChapters, b.TotalChapters);
+            libraryCardItem.SubtitleText = Loc.FN("{0} بخش", b.TotalChapters, b.TotalChapters);
             libraryCardItem.ProgressText = progress;
             libraryCardItem.ProgressPercent = b.ProgressPercent;
             libraryCardItem.SingleBook = b;
@@ -1322,7 +1321,7 @@ namespace EpubReader
             }
             CollectionRegistry.Add(name);
             RefreshCollectionsPanel();
-            MessageBoxResult answer = DarkMessageBox.Show(Loc.F("مجموعه‌ی «{0}» ساخته شد.\nهمین الان فایل‌های EPUB رو بهش اضافه کنم؟", name), Loc.T("مجموعه‌ها"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            MessageBoxResult answer = DarkMessageBox.Show(Loc.F("مجموعه‌ی «{0}» ساخته شد.\nهمین الان فایل‌های کتاب رو بهش اضافه کنم؟", name), Loc.T("مجموعه‌ها"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer == MessageBoxResult.Yes)
             {
                 AddFilesToCollection(name);
@@ -1334,7 +1333,7 @@ namespace EpubReader
             OpenFileDialog ofd = new OpenFileDialog
             {
                 Filter = Loc.T("کتاب‌ها (EPUB، PDF، TXT، Markdown، DOCX، CBZ)") + "|" + BookConverter.DialogPatterns,
-                Title = Loc.T("انتخاب فایل‌های EPUB برای این مجموعه"),
+                Title = Loc.T("انتخاب فایل‌های کتاب برای این مجموعه"),
                 Multiselect = true
             };
             if (ofd.ShowDialog() != true)
@@ -1392,7 +1391,7 @@ namespace EpubReader
             {
                 return;
             }
-            MessageBoxResult answer = DarkMessageBox.Show(Loc.F("مجموعه‌ی «{0}» حذف بشه؟\n(کتاب‌ها توی کتابخونه می‌مونن و فایل‌های EPUB پاک نمی‌شن)", row.Name), Loc.T("حذف مجموعه"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            MessageBoxResult answer = DarkMessageBox.Show(Loc.F("مجموعه‌ی «{0}» حذف بشه؟\n(کتاب‌ها توی کتابخونه می‌مونن و فایل‌های کتاب پاک نمی‌شن)", row.Name), Loc.T("حذف مجموعه"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer != MessageBoxResult.Yes)
             {
                 return;
@@ -1869,7 +1868,7 @@ namespace EpubReader
             OpenFileDialog ofd = new OpenFileDialog
             {
                 Filter = Loc.T("کتاب‌ها (EPUB، PDF، TXT، Markdown، DOCX، CBZ)") + "|" + BookConverter.DialogPatterns,
-                Title = Loc.T("انتخاب فایل EPUB"),
+                Title = Loc.T("انتخاب فایل کتاب"),
                 Multiselect = true
             };
             if (ofd.ShowDialog() != true)
@@ -1987,7 +1986,7 @@ namespace EpubReader
 
         // ---------- افزودن چند کتاب ----------
 
-        // فایل‌ها و پوشه‌ها رو به لیست فایل‌های EPUB تبدیل می‌کنه (پوشه‌ها با زیرپوشه‌هاشون)
+        // فایل‌ها و پوشه‌ها رو به لیست فایل‌های کتاب تبدیل می‌کنه (پوشه‌ها با زیرپوشه‌هاشون)
         private static List<string> CollectEpubPaths(IEnumerable<string> inputs, out int ignored)
         {
             List<string> result = new List<string>();
@@ -2035,7 +2034,7 @@ namespace EpubReader
         // خوندن EPUB و ساختن Book؛ روی نخ پس‌زمینه اجرا می‌شه تا برنامه قفل نکنه
         private static Book ImportEpub(string path)
         {
-            EpubBook epub = EpubParser.Load(path);
+            EpubBook epub = NativeBooks.Open(path);
             try
             {
                 Directory.Delete(epub.ExtractPath, true);
@@ -2063,11 +2062,16 @@ namespace EpubReader
             }
             int ignored;
             List<string> files = CollectEpubPaths(inputs, out ignored);
+            LibraryService.LogOpen("[Add] inputs=" + string.Join(" ; ", inputs ?? new string[0]) + " | files=" + files.Count + " | ignored=" + ignored);
             if (files.Count == 0)
             {
+                if (ignored == 0)
+                {
+                    DarkMessageBox.Show(Loc.T("فایل قابل افزودنی پیدا نشد."), Loc.T("افزودن کتاب"), MessageBoxButton.OK, MessageBoxImage.Asterisk);
+                }
                 if (ignored > 0)
                 {
-                    DarkMessageBox.Show(Loc.T("فقط فایل‌های EPUB، PDF، TXT، Markdown، DOCX و CBZ (یا پوشه‌ی حاوی اون‌ها) قابل افزودن هستن."), Loc.T("افزودن کتاب"), MessageBoxButton.OK, MessageBoxImage.Asterisk);
+                    DarkMessageBox.Show(Loc.T("فقط فایل‌های کتاب، PDF، TXT، Markdown، DOCX و CBZ (یا پوشه‌ی حاوی اون‌ها) قابل افزودن هستن."), Loc.T("افزودن کتاب"), MessageBoxButton.OK, MessageBoxImage.Asterisk);
                 }
                 return;
             }
@@ -2084,7 +2088,7 @@ namespace EpubReader
                 foreach (string f in files)
                 {
                     // فایل TXT/Markdown/DOCX با EPUBِ تبدیل‌شده‌ش وارد کتابخونه می‌شه؛ برای تشخیص تکراری همون مسیر چک می‌شه
-                    string libPath = BookConverter.IsConvertible(f) ? BookConverter.TargetPathFor(f) : f;
+                    string libPath = f;
                     if (existing.Contains(libPath))
                     {
                         if (!string.IsNullOrEmpty(targetCollection))
@@ -2109,7 +2113,7 @@ namespace EpubReader
                     ShowBusy(Loc.F("در حال افزودن {0} از {1}…", i + 1, toImport.Count), i * 100.0 / toImport.Count);
                     try
                     {
-                        Book imported = await Task.Run(() => ImportEpub(BookConverter.IsConvertible(path) ? BookConverter.ConvertToEpub(path) : path));
+                        Book imported = await Task.Run(() => ImportEpub(path));
                         if (!string.IsNullOrEmpty(targetCollection))
                         {
                             imported.CollectionName = targetCollection;
@@ -2121,6 +2125,7 @@ namespace EpubReader
                     {
                         failed.Add(Path.GetFileName(path));
                         lastError = ex.Message;
+                        LibraryService.LogOpen("[Add] FAILED " + path + " : " + ex);
                     }
                 }
             }
@@ -2138,6 +2143,14 @@ namespace EpubReader
                     UpdateTabStyles();
                 }
                 ApplyFilterAnimated(true);
+            }
+            GenerateMissingPdfCovers();
+
+            LibraryService.LogOpen("[Add] result added=" + added + " duplicates=" + duplicates + " failed=" + failed.Count);
+            if (added == 0 && duplicates == 0 && failed.Count == 0)
+            {
+                DarkMessageBox.Show(Loc.T("هیچ کتابی اضافه نشد."), Loc.T("افزودن کتاب"), MessageBoxButton.OK, MessageBoxImage.Exclamation);
+                return;
             }
 
             // فقط یک فایل انتخاب شده بود: همون پیام‌های قبلی
@@ -2179,7 +2192,7 @@ namespace EpubReader
             }
             if (ignored > 0)
             {
-                lines.Add("• " + Loc.FN("{0} مورد EPUB نبود و نادیده گرفته شد.", ignored, ignored));
+                lines.Add("• " + Loc.FN("{0} مورد کتاب قابل‌خواندن نبود و نادیده گرفته شد.", ignored, ignored));
             }
             DarkMessageBox.Show(string.Join("\n", lines), Loc.T("افزودن کتاب"), MessageBoxButton.OK, failed.Count > 0 ? MessageBoxImage.Exclamation : MessageBoxImage.Asterisk);
         }
@@ -2315,7 +2328,7 @@ namespace EpubReader
                 return;
             }
             int n = selectedPaths.Count;
-            MessageBoxResult result = DarkMessageBox.Show(Loc.FN("{0} کتاب از کتابخونه حذف بشه؟\n(خود فایل‌های EPUB پاک نمیشن)", n, n), Loc.T("حذف کتاب"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            MessageBoxResult result = DarkMessageBox.Show(Loc.FN("{0} کتاب از کتابخونه حذف بشه؟\n(خود فایل‌های کتاب پاک نمیشن)", n, n), Loc.T("حذف کتاب"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes)
             {
                 return;
@@ -2350,8 +2363,8 @@ namespace EpubReader
             {
                 return true;
             }
-            string status = (book.IsCompleted ? Loc.T("این کتاب رو تموم کردی.") : Loc.F("تا فصل {0} از {1} خوندی.", book.LastChapterDisplay, book.TotalChapters));
-            MessageBoxResult result = DarkMessageBox.Show(status + Loc.F("\nمی‌خوای از اول بخونیش؟\n\nبله: از اول (پیشرفت صفر میشه)\nخیر: ادامه از فصل {0}", book.LastChapterDisplay), "شروع دوباره؟", MessageBoxButton.YesNo, MessageBoxImage.Question, true);
+            string status = (book.IsCompleted ? Loc.T("این کتاب رو تموم کردی.") : Loc.F("تا بخش {0} از {1} خوندی.", book.LastChapterDisplay, book.TotalChapters));
+            MessageBoxResult result = DarkMessageBox.Show(status + Loc.F("\nمی‌خوای از اول بخونیش؟\n\nبله: از اول (پیشرفت صفر میشه)\nخیر: ادامه از بخش {0}", book.LastChapterDisplay), "شروع دوباره؟", MessageBoxButton.YesNo, MessageBoxImage.Question, true);
             if (result == MessageBoxResult.Cancel)
             {
                 return false;
@@ -2372,8 +2385,64 @@ namespace EpubReader
 
         private bool openingBook = false;
 
+        private bool pdfCoverJobRunning;
+
+        // جلد PDFهایی که ندارن، بی‌سروصدا و بدون باز کردن کتاب ساخته می‌شه
+        private async void GenerateMissingPdfCovers()
+        {
+            if (pdfCoverJobRunning)
+            {
+                return;
+            }
+            pdfCoverJobRunning = true;
+            try
+            {
+                bool again = true;
+                while (again)
+                {
+                    again = false;
+                    List<Book> todo = LibraryService.LoadBooks().Where((Book b) =>
+                        !string.IsNullOrEmpty(b.FilePath)
+                        && string.Equals(Path.GetExtension(b.FilePath), ".pdf", StringComparison.OrdinalIgnoreCase)
+                        && File.Exists(b.FilePath)
+                        && (string.IsNullOrEmpty(b.CoverImagePath) || !File.Exists(b.CoverImagePath))
+                        && AppSettings.Get("PdfCoverFail_" + b.Id, "") != "1").ToList();
+                    foreach (Book b in todo)
+                    {
+                        string cover = await PdfCoverService.MakeCoverAsync(b.FilePath);
+                        if (cover == null)
+                        {
+                            AppSettings.Set("PdfCoverFail_" + b.Id, "1");
+                            continue;
+                        }
+                        Book fresh = LibraryService.LoadBooks().Find((Book x) => string.Equals(x.FilePath, b.FilePath, StringComparison.OrdinalIgnoreCase));
+                        if (fresh != null)
+                        {
+                            fresh.CoverImagePath = cover;
+                            LibraryService.AddOrUpdateBook(fresh);
+                            again = true;
+                        }
+                    }
+                    if (again)
+                    {
+                        LoadLibrary();
+                        again = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LibraryService.LogOpen("[Cover] job failed: " + ex.Message);
+            }
+            finally
+            {
+                pdfCoverJobRunning = false;
+            }
+        }
+
         private async void WarmUpReader()
         {
+            Dispatcher.BeginInvoke(new Action(GenerateMissingPdfCovers), DispatcherPriority.ApplicationIdle);
             try
             {
                 MainWindow.PreloadFonts();
@@ -2436,10 +2505,10 @@ namespace EpubReader
                 LibraryService.LogOpen("[Library] request: " + selectedBook.DisplayTitle + " | " + selectedBook.FilePath);
                 ShowBusy(Loc.F("در حال باز کردن «{0}»...", selectedBook.DisplayTitle), 0.0);
                 progressBusy.BeginAnimation(RangeBase.ValueProperty, new DoubleAnimation(0.0, 90.0, new Duration(TimeSpan.FromMilliseconds(1400))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
-                // اول بذار پیام روی صفحه دیده بشه، بعد کار سنگین (باز کردن فایل EPUB) توی پس‌زمینه انجام بشه
+                // اول بذار پیام روی صفحه دیده بشه، بعد کار سنگین (باز کردن فایل کتاب) توی پس‌زمینه انجام بشه
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
                 string filePath = selectedBook.FilePath;
-                preloaded = await Task.Run(() => EpubParser.Load(filePath));
+                preloaded = await Task.Run(() => NativeBooks.Open(filePath));
 
                 LibraryService.MarkAsOpened(selectedBook.FilePath);
                 selectedBook.LastOpenedDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -2564,7 +2633,7 @@ namespace EpubReader
             Book bookToDelete = (tagItem != null) ? (tagItem.Tag as Book) : null;
             if (bookToDelete != null)
             {
-                MessageBoxResult result = DarkMessageBox.Show(Loc.F("آیا مطمئنید می‌خواید «{0}» رو از کتابخانه حذف کنید؟\n(خود فایل EPUB پاک نمیشه)", bookToDelete.DisplayTitle), "حذف کتاب", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                MessageBoxResult result = DarkMessageBox.Show(Loc.F("آیا مطمئنید می‌خواید «{0}» رو از کتابخانه حذف کنید؟\n(خود فایل کتاب پاک نمیشه)", bookToDelete.DisplayTitle), "حذف کتاب", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (result == MessageBoxResult.Yes)
                 {
                     LibraryService.RemoveBook(bookToDelete.FilePath);

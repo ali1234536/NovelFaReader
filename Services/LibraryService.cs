@@ -101,16 +101,30 @@ public static class LibraryService
 	}
 
 	// کتاب‌هایی که اسم یکسان یا کلی (مثل «کتاب ترجمه‌شده») دارن، با اسم فایلشون نشون داده می‌شن تا از هم قابل تشخیص باشن
+	// اسم فایل تمیز: خط‌تیره‌ی زیرین → فاصله، حذف برچسب «@NovelFa» و فاصله/خط‌تیره‌ی اضافه‌ی آخر
+	public static string CleanFileName(string name)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+		{
+			return name;
+		}
+		string t = System.Text.RegularExpressions.Regex.Replace(name, "[_\\s]*@NovelFa", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		t = t.Replace('_', ' ');
+		t = System.Text.RegularExpressions.Regex.Replace(t, "\\s{2,}", " ");
+		t = t.Trim().Trim('-', ' ', '.');
+		return t.Length == 0 ? name : t;
+	}
+
 	private static void AssignDisplayTitles(List<Book> list)
 	{
 		foreach (Book b in list)
 		{
-			string t = (b.Title ?? "").Trim();
-			bool duplicate = list.Count((Book o) => string.Equals((o.Title ?? "").Trim(), t, StringComparison.OrdinalIgnoreCase)) > 1;
-			if ((duplicate || IsGenericTitle(t)) && !string.IsNullOrEmpty(b.FilePath))
+			// اسم کتاب = اسم فایل (همون چیزی که کاربر توی پوشه می‌بینه)؛ عنوان داخل فایل اغلب شلوغ یا یکسانه (مثل اسم سایت‌ها یا چند جلد با یک عنوان)
+			if (!string.IsNullOrEmpty(b.FilePath))
 			{
 				string name = Path.GetFileNameWithoutExtension(b.FilePath);
-				b.DisplayTitle = string.IsNullOrWhiteSpace(name) ? b.Title : name;
+				string cleaned = CleanFileName(name);
+				b.DisplayTitle = string.IsNullOrWhiteSpace(cleaned) ? b.Title : cleaned;
 			}
 		}
 	}

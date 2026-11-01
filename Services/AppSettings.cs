@@ -125,8 +125,8 @@ namespace EpubReader.Services
             new ShortcutAction("lib.minimize", GroupLibrary, "کوچک کردن پنجره"),
             new ShortcutAction("lib.close", GroupLibrary, "بستن برنامه"),
 
-            new ShortcutAction("rd.next", GroupReader, "فصل بعدی"),
-            new ShortcutAction("rd.prev", GroupReader, "فصل قبلی"),
+            new ShortcutAction("rd.next", GroupReader, "بخش بعدی"),
+            new ShortcutAction("rd.prev", GroupReader, "بخش قبلی"),
             new ShortcutAction("rd.fontUp", GroupReader, "بزرگ‌تر کردن فونت"),
             new ShortcutAction("rd.fontDown", GroupReader, "کوچک‌تر کردن فونت"),
             new ShortcutAction("rd.addFont", GroupReader, "افزودن فونت شخصی"),

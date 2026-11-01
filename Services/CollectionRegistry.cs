@@ -19,7 +19,7 @@ public sealed class CollectionRow
 	}
 
 	// متن دکمه‌های هر ردیف (توی DataTemplate ترجمه‌ی خودکار نمی‌شن)
-	public string AddText { get { return Loc.T("افزودن EPUB"); } }
+	public string AddText { get { return Loc.T("افزودن کتاب"); } }
 
 	public string OpenText { get { return Loc.T("باز کردن"); } }
 

@@ -60,7 +60,7 @@ namespace EpubReader.Services
         public int TotalXp;
     }
 
-    // موتور رتبه‌ی XP (پورت نسخه‌ی اندروید): واحد XP یک فصل کتابه و بر اساس حجم متنه
+    // موتور رتبه‌ی XP (پورت نسخه‌ی اندروید): واحد XP یک بخش کتابه و بر اساس حجم متنه
     public static class XpRank
     {
         public const int CapXp = 27000;
@@ -138,7 +138,7 @@ namespace EpubReader.Services
             return lv;
         }
 
-        // XP یک فصل از روی تعداد کلماتش
+        // XP یک بخش از روی تعداد کلماتش
         public static int XpForUnit(int words)
         {
             return Math.Max(1, (Math.Max(0, words) + 1000) / 2000);
@@ -232,7 +232,7 @@ namespace EpubReader.Services
         }
     }
 
-    // دفترچه‌ی فصل‌های XP‌گرفته‌ی هر کتاب. خواندن پشت‌سرهم به یک عدد (upTo) فشرده می‌شه.
+    // دفترچه‌ی بخش‌های XP‌گرفته‌ی هر کتاب. خواندن پشت‌سرهم به یک عدد (upTo) فشرده می‌شه.
     // قالب: id:upTo:extraCsv:bookXp;...|bonusId,bonusId
     public sealed class XpLedger
     {
@@ -444,7 +444,7 @@ namespace EpubReader.Services
             return filtered.Serialize();
         }
 
-        // مهاجرت از سیستم قدیمی: فصل‌های 0..unitsRead-1 با ۱ XP
+        // مهاجرت از سیستم قدیمی: بخش‌های 0..unitsRead-1 با ۱ XP
         public void SetLegacy(string bookId, int unitsRead, int bookXpValue, bool bonus)
         {
             if (unitsRead <= 0)
@@ -551,13 +551,13 @@ namespace EpubReader.Services
         }
     }
 
-    // ردیاب نشست: یه فصل وقتی XP می‌گیره که حداقل ۵ ثانیه توش مونده باشی و ازش بری (یا کتاب رو ببندی)
+    // ردیاب نشست: یه بخش وقتی XP می‌گیره که حداقل ۵ ثانیه توش مونده باشی و ازش بری (یا کتاب رو ببندی)
     public sealed class XpSessionTracker
     {
         private int current = -1;
         private DateTime enteredAt;
 
-        // برمی‌گردونه فصل قبلی رو اگه شرایطش رو داشت، وگرنه -1
+        // برمی‌گردونه بخش قبلی رو اگه شرایطش رو داشت، وگرنه -1
         public int Enter(int unit)
         {
             DateTime now = DateTime.UtcNow;
@@ -674,7 +674,7 @@ namespace EpubReader.Services
             return 0;
         }
 
-        // XP یک فصل رو ثبت می‌کنه. null یعنی چیزی ثبت نشد (خصوصی، تکراری، نامعتبر)
+        // XP یک بخش رو ثبت می‌کنه. null یعنی چیزی ثبت نشد (خصوصی، تکراری، نامعتبر)
         public static XpCredit CreditUnit(string bookId, int unit, int words, int totalUnits, bool isPrivate)
         {
             bookId = XpLedger.SafeId(bookId);

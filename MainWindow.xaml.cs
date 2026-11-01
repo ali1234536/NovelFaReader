@@ -34,7 +34,7 @@ namespace EpubReader
 
         private bool isAppendingChapter = false;
 
-        // شماره‌ی نسخه‌ی صفحه‌ی فعلی + اولین و آخرین فصلی که توی صفحه بارگذاری شده (برای حالت پیوسته)
+        // شماره‌ی نسخه‌ی صفحه‌ی فعلی + اولین و آخرین بخشی که توی صفحه بارگذاری شده (برای حالت پیوسته)
         private int docGen = 0;
 
         private int contFirst = 0;
@@ -50,7 +50,7 @@ namespace EpubReader
 
         private int supportSeconds = 0;
 
-        // true یعنی متن فصلِ در حال خواندن لاتین/چپ‌به‌راست است (برای جهت ویجت حمایت)
+        // true یعنی متن بخشِ در حال خواندن لاتین/چپ‌به‌راست است (برای جهت ویجت حمایت)
         private bool readerTextIsLtr = false;
 
         private int supportSaveTick = 0;
@@ -354,6 +354,7 @@ namespace EpubReader
                 StopScrollWatcher();
                 StopSupportReminder();
                 CreditXp(xpTracker.Flush());
+                FlushPdfProgress();
                 ShutdownWebView();
                 CleanupCurrentBook();
             };
@@ -422,6 +423,7 @@ namespace EpubReader
 
         private void CleanupCurrentBook()
         {
+            PdfViewerHost.CloseComic();
             if (currentBook != null && !string.IsNullOrEmpty(currentBook.ExtractPath))
             {
                 try
@@ -440,11 +442,52 @@ namespace EpubReader
             {
                 CleanupCurrentBook();
                 currentLibraryBook = book;
-                pdfSource = BookConverter.PdfSourceFor(book.FilePath);
+                string bookExt = Path.GetExtension(book.FilePath ?? "").ToLowerInvariant();
+                pdfSource = null;
+                comicMode = false;
+                comicNative = false;
+                docKind = null;
+                if (bookExt == ".pdf")
+                {
+                    pdfSource = book.FilePath;
+                }
+                else if (bookExt == ".cbz" || bookExt == ".zip")
+                {
+                    pdfSource = book.FilePath;
+                    comicMode = true;
+                    comicNative = true;
+                }
+                else if (NativeBooks.DocKindOf(book.FilePath) != null)
+                {
+                    pdfSource = book.FilePath;
+                    docKind = NativeBooks.DocKindOf(book.FilePath);
+                }
+                else
+                {
+                    pdfSource = BookConverter.PdfSourceFor(book.FilePath);
+                    if (pdfSource == null && BookConverter.IsComicBook(book.FilePath))
+                    {
+                        pdfSource = book.FilePath;
+                        comicMode = true;
+                    }
+                }
+                if (pdfSource == null && docKind == null)
+                {
+                    string dk = BookConverter.DocKindFor(book.FilePath);
+                    if (dk != null)
+                    {
+                        pdfSource = book.FilePath;
+                        docKind = dk;
+                    }
+                }
+                ApplyPdfChrome(pdfSource != null);
                 xpKey = null;
                 ResolveXpKeyAsync(book);
+                pdfTotalPages = 0;
+                pdfPendingPage = 0;
                 pdfShown = false;
-                currentBook = preloaded ?? EpubParser.Load(book.FilePath);
+                pdfOutlinePages = null;
+                currentBook = preloaded ?? NativeBooks.Open(book.FilePath);
                 LibraryService.LogOpen("[Reader] loaded: " + book.FilePath + " | extract=" + currentBook.ExtractPath + " | chapters=" + currentBook.Chapters.Count + " | startIndex=" + book.LastChapterIndex);
                 if (!string.IsNullOrEmpty(currentBook.CoverImagePath))
                 {
@@ -516,7 +559,7 @@ namespace EpubReader
                 return existing;
             }
 
-            EpubBook epub = EpubParser.Load(filePath);
+            EpubBook epub = NativeBooks.Open(filePath);
             try
             {
                 Book book = new Book();
@@ -554,7 +597,7 @@ namespace EpubReader
         {
             OpenFileDialog openFileDialog = new OpenFileDialog();
             openFileDialog.Filter = Loc.T("کتاب‌ها (EPUB، PDF، TXT، Markdown، DOCX، CBZ)") + "|" + BookConverter.DialogPatterns;
-            openFileDialog.Title = Loc.T("انتخاب فایل EPUB");
+            openFileDialog.Title = Loc.T("انتخاب فایل کتاب");
             OpenFileDialog ofd = openFileDialog;
             if (ofd.ShowDialog() != true)
             {
@@ -563,7 +606,7 @@ namespace EpubReader
             try
             {
                 string pickedFile = ofd.FileName;
-                string openPath = BookConverter.IsConvertible(pickedFile) ? await Task.Run(() => BookConverter.ConvertToEpub(pickedFile)) : pickedFile;
+                string openPath = pickedFile;
                 Book libraryBook = GetOrCreateLibraryBook(openPath);
                 LibraryService.MarkAsOpened(libraryBook.FilePath);
                 libraryBook.LastOpenedDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -611,8 +654,44 @@ namespace EpubReader
             Close();
         }
 
+        private async void PdfStep(int dir)
+        {
+            try { await webBrowser1.CoreWebView2.ExecuteScriptAsync("window.__pdfStep&&window.__pdfStep(" + dir + ")"); }
+            catch { }
+        }
+
+        // در حالت PDF کنترل‌های مخصوص متن (فونت/فاصله/حالت پیوسته) پنهان می‌شوند
+        private void ApplyPdfChrome(bool pdf)
+        {
+            var vis = pdf ? Visibility.Collapsed : Visibility.Visible;
+            icoFontTop.Visibility = vis;
+            boxFontSearch.Visibility = vis;
+            cmbFontFamily.Visibility = vis;
+            btnAddFont.Visibility = vis;
+            btnSpacing.Visibility = vis;
+            txtFontSize.Visibility = vis;
+            btnContinuousMode.Visibility = vis;
+            txtCurrentLabel.Text = Loc.T(pdf ? "صفحه فعلی" : "بخش فعلی");
+            txtPrevLabel.Text = Loc.T(pdf ? "صفحه قبلی" : "بخش قبلی");
+            txtNextLabel.Text = Loc.T(pdf ? "صفحه بعدی" : "بخش بعدی");
+            txtOpenLabel.Text = Loc.T(pdf ? "باز کردن فایل" : "باز کردن فایل کتاب");
+            txtChapterListHeader.Text = Loc.T("فهرست بخش‌ها");
+            // صفحه‌ها در خود نمایشگر PDF (سمت چپ) هستند؛ فهرست بخش فقط وقتی فهرست مطالب داشته باشد دیده می‌شود
+            txtChapterListHeader.Visibility = vis == Visibility.Collapsed ? Visibility.Collapsed : Visibility.Visible;
+            listBoxChapters.Visibility = txtChapterListHeader.Visibility;
+            if (pdf)
+            {
+                txtChapterPosition.Text = "";
+            }
+        }
+
         private void btnNextChapter_Click(object sender, RoutedEventArgs e)
         {
+            if (pdfSource != null)
+            {
+                PdfStep(1);
+                return;
+            }
             if (currentBook != null && listBoxChapters.SelectedIndex < listBoxChapters.Items.Count - 1)
             {
                 listBoxChapters.SelectedIndex++;
@@ -621,6 +700,11 @@ namespace EpubReader
 
         private void btnPrevChapter_Click(object sender, RoutedEventArgs e)
         {
+            if (pdfSource != null)
+            {
+                PdfStep(-1);
+                return;
+            }
             if (currentBook != null && listBoxChapters.SelectedIndex > 0)
             {
                 listBoxChapters.SelectedIndex--;
@@ -629,6 +713,15 @@ namespace EpubReader
 
         private void listBoxChapters_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (pdfSource != null && pdfOutlinePages != null)
+            {
+                // PDF: انتخاب از فهرست بخش‌ها (outline خود PDF) = پرش به صفحه‌ی اون
+                if (!isProgrammaticSelection && listBoxChapters.SelectedIndex >= 0 && listBoxChapters.SelectedIndex < pdfOutlinePages.Count)
+                {
+                    RunScriptAsync("window.__pdfGoto&&window.__pdfGoto(" + pdfOutlinePages[listBoxChapters.SelectedIndex] + ");");
+                }
+                return;
+            }
             if (currentBook != null && listBoxChapters.SelectedIndex >= 0 && !isProgrammaticSelection)
             {
                 ChapterItem chapter = currentBook.Chapters[listBoxChapters.SelectedIndex];
@@ -644,6 +737,11 @@ namespace EpubReader
 
         private void SaveReadingProgress(int chapterIndex)
         {
+            if (pdfSource != null)
+            {
+                // پیشرفت PDF با شماره‌ی صفحه از خود نمایشگر PDF می‌رسه
+                return;
+            }
             if (currentLibraryBook != null)
             {
                 currentLibraryBook.LastChapterIndex = chapterIndex;
@@ -653,7 +751,7 @@ namespace EpubReader
             }
         }
 
-        // XP فصل‌ها: فقط فصلی که دیده شده، حداقل ۵ ثانیه توش مونده و ازش رفتی، یک‌بار XP می‌ده (کتاب خصوصی XP نمی‌ده)
+        // XP بخش‌ها: فقط بخشی که دیده شده، حداقل ۵ ثانیه توش مونده و ازش رفتی، یک‌بار XP می‌ده (کتاب خصوصی XP نمی‌ده)
         private readonly XpSessionTracker xpTracker = new XpSessionTracker();
 
         // کلید XP کتاب: هش محتوای فایل (تا حذف و افزودن دوباره‌ی کتاب XP تازه نده). تا حاضر شدن هش، Id خود کتاب استفاده می‌شه و بعدش ورودی‌ش منتقل می‌شه
@@ -684,8 +782,251 @@ namespace EpubReader
             }
         }
 
+        private int pdfTotalPages;
+
+        // جلد کتاب PDF = صفحه‌ی اولش (از خود نمایشگر می‌رسه)
+        private void SavePdfCover(string base64)
+        {
+            if (pdfSource == null || currentLibraryBook == null || string.IsNullOrEmpty(base64) || base64.Length > 4000000)
+            {
+                return;
+            }
+            try
+            {
+                byte[] jpg = Convert.FromBase64String(base64);
+                if (jpg.Length < 200)
+                {
+                    return;
+                }
+                string covers = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EpubReaderApp", "Covers");
+                Directory.CreateDirectory(covers);
+                string key;
+                using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+                {
+                    key = BitConverter.ToString(md5.ComputeHash(Encoding.UTF8.GetBytes((currentLibraryBook.FilePath ?? "").ToLowerInvariant()))).Replace("-", "").ToLowerInvariant();
+                }
+                string dest = Path.Combine(covers, "cover_" + key + ".jpg");
+                File.WriteAllBytes(dest, jpg);
+                currentLibraryBook.CoverImagePath = dest;
+                LibraryService.AddOrUpdateBook(currentLibraryBook);
+            }
+            catch
+            {
+                // جلد نشد: کتاب بدون جلد می‌مونه
+            }
+        }
+
+        // صفحه‌ی هر ردیفِ فهرست بخش‌ها وقتی PDF بازه (از outline خود PDF)
+        private List<int> pdfOutlinePages;
+
+        // outline خود PDF می‌شه فهرست بخش‌های برنامه؛ ردیف‌های تو در تو کمی تو رفتگی دارن
+        private void OnPdfOutline(string encoded)
+        {
+            if (pdfSource == null)
+            {
+                return;
+            }
+            try
+            {
+                List<object> items = MiniJson.Parse(Uri.UnescapeDataString(encoded ?? "")) as List<object>;
+                if (items == null || items.Count == 0)
+                {
+                    return;
+                }
+                txtChapterListHeader.Text = Loc.T("فهرست مطالب");
+                txtChapterListHeader.Visibility = Visibility.Visible;
+                listBoxChapters.Visibility = Visibility.Visible;
+                List<int> pages = new List<int>();
+                List<ListBoxItem> entries = new List<ListBoxItem>();
+                foreach (object o in items)
+                {
+                    JObject j = o as JObject;
+                    if (j == null || !(j.Get("p") is long))
+                    {
+                        continue;
+                    }
+                    string title = j.Get("t") as string;
+                    if (string.IsNullOrWhiteSpace(title))
+                    {
+                        continue;
+                    }
+                    int depth = j.Get("d") is long ? (int)Math.Min(2L, (long)j.Get("d")) : 0;
+                    ListBoxItem entry = new ListBoxItem();
+                    entry.Content = title;
+                    entry.FlowDirection = IsLatinText(title) ? FlowDirection.LeftToRight : FlowDirection.RightToLeft;
+                    entry.Padding = new Thickness(8 + depth * 14, entry.Padding.Top, 8, entry.Padding.Bottom);
+                    entries.Add(entry);
+                    pages.Add((int)Math.Max(1L, (long)j.Get("p")));
+                }
+                if (entries.Count == 0)
+                {
+                    return;
+                }
+                isProgrammaticSelection = true;
+                try
+                {
+                    listBoxChapters.Items.Clear();
+                    foreach (ListBoxItem it in entries)
+                    {
+                        listBoxChapters.Items.Add(it);
+                    }
+                    pdfOutlinePages = pages;
+                }
+                finally
+                {
+                    isProgrammaticSelection = false;
+                }
+            }
+            catch
+            {
+                // outline خراب: فهرست بخش‌ها همون یک ردیف می‌مونه
+            }
+        }
+
+        // بخشِ فعلی (آخرین ردیفی که صفحه‌ش از صفحه‌ی فعلی عقب‌تره) توی فهرست علامت می‌خوره
+        private void HighlightPdfOutline(int page)
+        {
+            if (pdfOutlinePages == null || pdfOutlinePages.Count == 0)
+            {
+                return;
+            }
+            int idx = -1;
+            for (int i = 0; i < pdfOutlinePages.Count; i++)
+            {
+                if (pdfOutlinePages[i] <= page)
+                {
+                    idx = i;
+                }
+            }
+            if (idx >= 0 && idx < listBoxChapters.Items.Count && listBoxChapters.SelectedIndex != idx)
+            {
+                isProgrammaticSelection = true;
+                try
+                {
+                    listBoxChapters.SelectedIndex = idx;
+                    listBoxChapters.ScrollIntoView(listBoxChapters.SelectedItem);
+                }
+                finally
+                {
+                    isProgrammaticSelection = false;
+                }
+            }
+        }
+
+        // زوم PDF برای هر کتاب جدا ذخیره می‌شه
+        private double ReadPdfZoom()
+        {
+            double z;
+            if (currentLibraryBook != null && !string.IsNullOrEmpty(currentLibraryBook.Id)
+                && double.TryParse(AppSettings.Get("PdfZoom_" + currentLibraryBook.Id, ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out z))
+            {
+                return z;
+            }
+            return 0;
+        }
+
+        private void SavePdfZoom(string value)
+        {
+            if (pdfSource == null || currentLibraryBook == null || string.IsNullOrEmpty(currentLibraryBook.Id))
+            {
+                return;
+            }
+            double z;
+            if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out z) && z > 0.3 && z < 5)
+            {
+                AppSettings.Set("PdfZoom_" + currentLibraryBook.Id, z.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
+        private int pdfPendingPage;
+
+        private DispatcherTimer pdfSaveTimer;
+
+        // تعداد صفحه‌های PDF رو توی کتابخونه ثبت می‌کنه تا درصد پیشرفت و «تمام‌شده» درست کار کنه
+        private void OnPdfTotal(int total)
+        {
+            if (pdfSource == null || total <= 0 || currentLibraryBook == null)
+            {
+                return;
+            }
+            pdfTotalPages = total;
+            if (currentLibraryBook.TotalChapters != total)
+            {
+                currentLibraryBook.TotalChapters = total;
+                if (currentLibraryBook.LastChapterIndex >= total)
+                {
+                    currentLibraryBook.LastChapterIndex = total - 1;
+                }
+                LibraryService.AddOrUpdateBook(currentLibraryBook);
+            }
+        }
+
+        // صفحه‌ی فعلی PDF: پیشرفت (با تأخیر کوتاه که با هر ورق زدن فایل کتابخونه بازنویسی نشه) و XP هر ۱۰ صفحه
+        private void OnPdfPage(int page, int total)
+        {
+            if (pdfSource == null || currentLibraryBook == null || page < 1)
+            {
+                return;
+            }
+            if (total > 0)
+            {
+                pdfTotalPages = total;
+            }
+            // عنوان بالای صفحه: صفحه‌ی فعلی از کل
+            txtChapterTitle.Text = Loc.F("صفحه {0} از {1}", page, Math.Max(total, page));
+            txtChapterPosition.Text = Loc.F("{0} از {1}", page, Math.Max(total, page));
+            HighlightPdfOutline(page);
+            pdfPendingPage = page;
+            if (pdfSaveTimer == null)
+            {
+                pdfSaveTimer = new DispatcherTimer();
+                pdfSaveTimer.Interval = TimeSpan.FromMilliseconds(1500);
+                pdfSaveTimer.Tick += (object s, EventArgs e) =>
+                {
+                    pdfSaveTimer.Stop();
+                    FlushPdfProgress();
+                };
+            }
+            pdfSaveTimer.Stop();
+            pdfSaveTimer.Start();
+            CreditXp(xpTracker.Enter((page - 1) / PdfViewerHost.PagesPerXpUnit));
+        }
+
+        private void FlushPdfProgress()
+        {
+            if (pdfSource == null || currentLibraryBook == null || pdfPendingPage < 1)
+            {
+                return;
+            }
+            int idx = pdfPendingPage - 1;
+            pdfPendingPage = 0;
+            if (pdfTotalPages > 0 && idx >= pdfTotalPages)
+            {
+                idx = pdfTotalPages - 1;
+            }
+            if (currentLibraryBook.LastChapterIndex != idx)
+            {
+                currentLibraryBook.LastChapterIndex = idx;
+                LibraryService.AddOrUpdateBook(currentLibraryBook);
+            }
+        }
+
         private void CreditXp(int unit)
         {
+            if (pdfSource != null)
+            {
+                if (unit >= 0 && pdfTotalPages > 0 && currentLibraryBook != null)
+                {
+                    try
+                    {
+                        XpStore.CreditUnit(xpKey ?? currentLibraryBook.Id, unit, 3000, (pdfTotalPages + PdfViewerHost.PagesPerXpUnit - 1) / PdfViewerHost.PagesPerXpUnit, currentLibraryBook.IsPrivate);
+                    }
+                    catch
+                    {
+                    }
+                }
+                return;
+            }
             if (unit < 0 || currentBook == null || currentLibraryBook == null || unit >= currentBook.Chapters.Count)
             {
                 return;
@@ -729,7 +1070,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در نمایش فصل:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در نمایش بخش:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
         }
 
@@ -789,7 +1130,7 @@ namespace EpubReader
             return Regex.Replace(html, "<script[\\s\\S]*?</script\\s*>", "", RegexOptions.IgnoreCase);
         }
 
-        // ---- آماده‌سازی متن فصل: عکس‌ها و اندازه‌ها ----
+        // ---- آماده‌سازی متن بخش: عکس‌ها و اندازه‌ها ----
         private static readonly System.Collections.Generic.HashSet<string> svgTagNames = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "svg", "image", "use", "symbol", "pattern", "mask", "g", "defs", "rect", "circle", "ellipse",
@@ -843,7 +1184,7 @@ namespace EpubReader
                 RegexOptions.IgnoreCase | RegexOptions.Singleline);
         }
 
-        // مسیر عکس‌ها رو کامل می‌کنه تا فصل‌های پوشه‌های مختلف توی حالت پیوسته عکسشون گم نشه
+        // مسیر عکس‌ها رو کامل می‌کنه تا بخش‌های پوشه‌های مختلف توی حالت پیوسته عکسشون گم نشه
         private static string MakeImageSourcesAbsolute(string html, string folder)
         {
             Uri baseFolder;
@@ -1426,11 +1767,21 @@ namespace EpubReader
 
         private void btnFontIncrease_Click(object sender, RoutedEventArgs e)
         {
+            if (pdfSource != null)
+            {
+                RunScriptAsync("window.__pdfZoomBy&&window.__pdfZoomBy(0.1);");
+                return;
+            }
             ApplyFontSize(currentFontSize + 2);
         }
 
         private void btnFontDecrease_Click(object sender, RoutedEventArgs e)
         {
+            if (pdfSource != null)
+            {
+                RunScriptAsync("window.__pdfZoomBy&&window.__pdfZoomBy(-0.1);");
+                return;
+            }
             ApplyFontSize(currentFontSize - 2);
         }
 
@@ -1610,7 +1961,7 @@ namespace EpubReader
             return DetectDirection(text) == 1;
         }
 
-        // برای کل فصل: جهت اصلی رو از روی اکثریت حروف تعیین می‌کنه
+        // برای کل بخش: جهت اصلی رو از روی اکثریت حروف تعیین می‌کنه
         private static string ChapterDirAttr(string bodyHtml)
         {
             int d = DetectDirection(HtmlToPlainText(bodyHtml));
@@ -1771,6 +2122,12 @@ namespace EpubReader
 
         private async void ReloadCurrentChapterWithNewStyle()
         {
+            if (pdfSource != null)
+            {
+                ReaderTheme pt = GetCurrentTheme();
+                RunScriptAsync("window.__pdfTheme&&window.__pdfTheme('" + pt.Bg + "','" + pt.Text + "'," + (pt.IsDark ? "1" : "0") + ");");
+                return;
+            }
             if (currentBook == null || listBoxChapters.SelectedIndex < 0)
             {
                 return;
@@ -1793,7 +2150,7 @@ namespace EpubReader
             string result = await RunScriptAsync(js);
             if (result == null || result == "null")
             {
-                // صفحه هنوز آماده نیست یا خطا داد: فصل دوباره بارگذاری می‌شه
+                // صفحه هنوز آماده نیست یا خطا داد: بخش دوباره بارگذاری می‌شه
                 if (currentBook != null && listBoxChapters.SelectedIndex >= 0 && listBoxChapters.SelectedIndex < currentBook.Chapters.Count)
                 {
                     ChapterItem chapter = currentBook.Chapters[listBoxChapters.SelectedIndex];
@@ -2080,7 +2437,7 @@ namespace EpubReader
             }
             try
             {
-                // آستانه‌ی چسباندن فصل بعد: ۱۲۰۰ پیکسل مانده به ته (هم‌ارز اندروید) تا فصل
+                // آستانه‌ی چسباندن بخش بعد: ۱۲۰۰ پیکسل مانده به ته (هم‌ارز اندروید) تا بخش
                 // قبل از رسیدن کاربر به ته صفحه آماده باشد، نه بعد از آن.
                 string checkScript = "(function(){if(window.__rdrGen!==" + docGen + ")return 'x';var d=document.documentElement,b=document.body;var st=Math.max(d.scrollTop||0,b.scrollTop||0);var sh=Math.max(d.scrollHeight||0,b.scrollHeight||0);var ch=d.clientHeight||window.innerHeight;var idx=-1;var cs=b.getElementsByTagName('div');for(var i=0;i<cs.length;i++){if(cs[i].className=='rdr-chap'&&cs[i].offsetTop<=st+ch/3){idx=parseInt(cs[i].getAttribute('data-idx'),10);}}return (((st+ch)>=(sh-1200))?'1':'0')+'|'+((st<=300)?'1':'0')+'|'+idx;})();";
                 string text = JsonToString(await RunScriptAsync(checkScript));
@@ -2112,7 +2469,7 @@ namespace EpubReader
             }
         }
 
-        // فصلی که الان توی صفحه دیده می‌شه رو توی لیست، عنوان و پیشرفت ذخیره‌شده هماهنگ می‌کنه
+        // بخشی که الان توی صفحه دیده می‌شه رو توی لیست، عنوان و پیشرفت ذخیره‌شده هماهنگ می‌کنه
         private void UpdateCurrentChapterFromScroll(int idx)
         {
             if (currentBook == null || idx < contFirst || idx > contLast)
@@ -2158,7 +2515,7 @@ namespace EpubReader
             return PrepareChapterBody(html, Path.GetDirectoryName(chapter.FilePath));
         }
 
-        // خوندن فایل فصل از دیسک روی نخ پس‌زمینه انجام می‌شه تا موقع اسکرول لگ نیفته؛ آماده‌سازی HTML روی نخ رابط می‌مونه
+        // خوندن فایل بخش از دیسک روی نخ پس‌زمینه انجام می‌شه تا موقع اسکرول لگ نیفته؛ آماده‌سازی HTML روی نخ رابط می‌مونه
         private async Task<string> ReadChapterBodyAsync(ChapterItem chapter)
         {
             string path = chapter.FilePath;
@@ -2202,7 +2559,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در بارگذاری فصل بعدی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در بارگذاری بخش بعدی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
             finally
             {
@@ -2210,7 +2567,7 @@ namespace EpubReader
             }
         }
 
-        // فصل قبلی رو بالای صفحه اضافه می‌کنه و جای اسکرول رو طوری تنظیم می‌کنه که متن نپره
+        // بخش قبلی رو بالای صفحه اضافه می‌کنه و جای اسکرول رو طوری تنظیم می‌کنه که متن نپره
         private async void PrependPreviousChapter()
         {
             if (currentBook == null)
@@ -2259,7 +2616,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در بارگذاری فصل قبلی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در بارگذاری بخش قبلی:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
             finally
             {
@@ -2275,6 +2632,9 @@ namespace EpubReader
 
         // اگه کتاب باز‌شده در اصل PDF باشه، مسیر PDF اصلی که با نمایشگر خود PDF نشون داده می‌شه
         private string pdfSource;
+        private bool comicMode;
+        private bool comicNative;
+        private string docKind;
 
         private bool pdfShown;
 
@@ -2301,7 +2661,7 @@ namespace EpubReader
             Activated += (object s, EventArgs e) => PushShortcutsToPage();
         }
 
-        // متن فصل رو توی یک فایل موقت می‌نویسه و نمایشگر رو بهش می‌بره
+        // متن بخش رو توی یک فایل موقت می‌نویسه و نمایشگر رو بهش می‌بره
         // (تا عکس‌های داخل کتاب با آدرس فایل درست دیده بشن و محدودیت حجم هم نداشته باشیم)
         private void ShowHtmlPage(string html)
         {
@@ -2350,7 +2710,7 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در نمایش فصل:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                DarkMessageBox.Show(Loc.T("خطا در نمایش بخش:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
         }
 
@@ -2360,12 +2720,56 @@ namespace EpubReader
             {
                 return;
             }
-            navAllowed = true;
             if (pdfSource != null)
             {
-                webBrowser1.CoreWebView2.Navigate(new Uri(pdfSource).AbsoluteUri + "#view=FitH");
+                try
+                {
+                    ReaderTheme pdfTheme = GetCurrentTheme();
+                    int startPage = (currentLibraryBook != null && currentLibraryBook.TotalChapters > 1) ? currentLibraryBook.LastChapterIndex + 1 : 1;
+                    if (docKind != null)
+                    {
+                        PdfViewerHost.AttachComic(webBrowser1.CoreWebView2, currentBook.ExtractPath);
+                        navAllowed = true;
+                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildDocUrl(docKind, currentBook.ExtractPath, currentBook.Chapters, currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()));
+                        return;
+                    }
+                    if (comicMode && comicNative)
+                    {
+                        if (currentBook.NativePages == null || currentBook.NativePages.Count == 0)
+                        {
+                            throw new InvalidDataException(Loc.T("صفحه‌ای پیدا نشد"));
+                        }
+                        PdfViewerHost.AttachComic(webBrowser1.CoreWebView2, currentBook.ExtractPath);
+                        navAllowed = true;
+                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildComicUrl(currentBook.NativePages, currentBook.NativeStarts ?? new List<KeyValuePair<string, int>>(), currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()));
+                        return;
+                    }
+                    if (comicMode)
+                    {
+                        List<KeyValuePair<string, int>> comicStarts;
+                        List<string> comicPages = PdfViewerHost.CollectComicPages(currentBook.ExtractPath, currentBook.Chapters, out comicStarts);
+                        if (comicPages.Count == 0)
+                        {
+                            throw new InvalidDataException(Loc.T("صفحه‌ای پیدا نشد"));
+                        }
+                        PdfViewerHost.AttachComic(webBrowser1.CoreWebView2, currentBook.ExtractPath);
+                        navAllowed = true;
+                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildComicUrl(comicPages, comicStarts, currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()));
+                        return;
+                    }
+                    PdfViewerHost.Attach(webBrowser1.CoreWebView2, pdfSource);
+                    navAllowed = true;
+                    webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildUrl(pdfSource, pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom(), currentLibraryBook != null && (string.IsNullOrEmpty(currentLibraryBook.CoverImagePath) || !File.Exists(currentLibraryBook.CoverImagePath))));
+                }
+                catch (Exception ex)
+                {
+                    navAllowed = false;
+                    LibraryService.LogOpen("[Reader] PDF viewer failed: " + ex);
+                    DarkMessageBox.Show(Loc.T("نمایشگر PDF شروع نشد.") + "\n" + ex.Message, Loc.T("نمایشگر کتاب"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
                 return;
             }
+            navAllowed = true;
             webBrowser1.CoreWebView2.Navigate(new Uri(currentPageFile).AbsoluteUri);
         }
 
@@ -2453,7 +2857,7 @@ namespace EpubReader
             }
         }
 
-        // فقط خود صفحه‌ی فصل اجازه‌ی بارگذاری داره (لینک‌های بیرونی و لینک به فایل‌های دیگه بلاک می‌شن)
+        // فقط خود صفحه‌ی بخش اجازه‌ی بارگذاری داره (لینک‌های بیرونی و لینک به فایل‌های دیگه بلاک می‌شن)
         private void Core_NavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
             if (navAllowed)
@@ -2464,8 +2868,8 @@ namespace EpubReader
             string uri = e.Uri ?? "";
             if (pdfSource != null)
             {
-                // نمایشگر PDF داخلش چند فریم درونی می‌سازه؛ فقط لینک‌های اینترنتی بلاک می‌شن
-                if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                // فقط خود نمایشگر PDF و فایل همون PDF اجازه‌ی بارگذاری دارن
+                if (!PdfViewerHost.IsAllowedUri(uri))
                 {
                     e.Cancel = true;
                 }
@@ -2491,6 +2895,10 @@ namespace EpubReader
             if (webBrowser1.Visibility != Visibility.Visible)
             {
                 webBrowser1.Visibility = Visibility.Visible;
+            }
+            if (pdfSource != null)
+            {
+                PushShortcutsToPage();
             }
             for (int i = stalePageFiles.Count - 1; i >= 0; i--)
             {
@@ -2546,6 +2954,36 @@ namespace EpubReader
                     if (p.Length == 5 && int.TryParse(p[1], out a))
                     {
                         HandleBrowserCombo(a, p[2] == "1", p[3] == "1", p[4] == "1");
+                    }
+                    break;
+                case "pp":
+                    if (p.Length == 3 && int.TryParse(p[1], out a) && int.TryParse(p[2], out b))
+                    {
+                        OnPdfPage(a, b);
+                    }
+                    break;
+                case "cv":
+                    if (p.Length == 2)
+                    {
+                        SavePdfCover(p[1]);
+                    }
+                    break;
+                case "o":
+                    if (p.Length == 2)
+                    {
+                        OnPdfOutline(p[1]);
+                    }
+                    break;
+                case "z":
+                    if (p.Length == 2)
+                    {
+                        SavePdfZoom(p[1]);
+                    }
+                    break;
+                case "n":
+                    if (p.Length == 2 && int.TryParse(p[1], out a))
+                    {
+                        OnPdfTotal(a);
                     }
                     break;
                 case "i":

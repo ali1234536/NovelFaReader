@@ -145,6 +145,9 @@
     <Compile Include="Services\Convert\PdfParser.cs" />
     <Compile Include="Services\Convert\PdfTextFix.cs" />
     <Compile Include="Services\Convert\CbzParser.cs" />
+    <Compile Include="Services\PdfViewerHost.cs" />
+    <Compile Include="Services\NativeBooks.cs" />
+    <Compile Include="Services\PdfCoverService.cs" />
     <Compile Include="PdfPasswordWindow.cs" />
     <Compile Include="Services\CustomFontService.cs" />
     <Compile Include="Services\EpubParser.cs" />
@@ -222,6 +225,12 @@
     <AppDesigner Include="Properties\" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="PdfViewer\viewer.html" />
+    <EmbeddedResource Include="PdfViewer\comic.html" />
+    <EmbeddedResource Include="PdfViewer\doc.html" />
+    <EmbeddedResource Include="PdfViewer\pdf.min.js" />
+    <EmbeddedResource Include="PdfViewer\pdf.worker.min.js" />
+    <EmbeddedResource Include="PdfViewer\pdfdata.zip" />
     <EmbeddedResource Include="RecommendedFonts\*.ttf" />
     <EmbeddedResource Include="RecommendedFonts\*.otf" />
   </ItemGroup>

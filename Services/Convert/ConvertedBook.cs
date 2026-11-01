@@ -7,14 +7,14 @@ using System.Text.RegularExpressions;
 namespace EpubReader.Services
 {
 
-// فصل یک کتاب تبدیل‌شده: عنوان و فایل XHTML همون فصل
+// بخش یک کتاب تبدیل‌شده: عنوان و فایل XHTML همون بخش
 public sealed class ParsedChapter
 {
 	public string Title;
 	public string File;
 }
 
-// نتیجه‌ی پارس یک فایل غیر EPUB: عنوان، فصل‌ها (فایل‌های ch0001.xhtml… توی یه پوشه) و جلد اختیاری
+// نتیجه‌ی پارس یک فایل غیر EPUB: عنوان، بخش‌ها (فایل‌های ch0001.xhtml… توی یه پوشه) و جلد اختیاری
 public sealed class ParsedBook
 {
 	public string Title = "";
@@ -22,7 +22,7 @@ public sealed class ParsedBook
 	public string CoverFile;
 }
 
-// یک بخش خوانا: عنوان توی فهرست فصل‌ها و بدنه‌ی HTML
+// یک بخش خوانا: عنوان توی فهرست بخش‌ها و بدنه‌ی HTML
 public sealed class ConvertedSection
 {
 	public string Title;

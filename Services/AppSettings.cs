@@ -121,6 +121,7 @@ namespace EpubReader.Services
             new ShortcutAction("lib.tabPrivate", GroupLibrary, "بخش خصوصی"),
             new ShortcutAction("lib.changePin", GroupLibrary, "تغییر رمز"),
             new ShortcutAction("lib.theme", GroupLibrary, "تغییر حالت روشن/تیره"),
+            new ShortcutAction("lib.language", GroupLibrary, "تغییر زبان (فارسی / English)"),
             new ShortcutAction("lib.maximize", GroupLibrary, "بزرگ‌نمایی / بازگرداندن پنجره"),
             new ShortcutAction("lib.minimize", GroupLibrary, "کوچک کردن پنجره"),
             new ShortcutAction("lib.close", GroupLibrary, "بستن برنامه"),

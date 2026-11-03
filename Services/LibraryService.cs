@@ -40,7 +40,65 @@ public static class LibraryService
 	// اگه خوندن کتابخونه خطا بده، نباید یه لیست خالی جاش ذخیره بشه (وگرنه همه‌ی کتاب‌ها پاک می‌شن)
 	private static bool lastLoadFailed = false;
 
+	// کش: تا وقتی فایل کتابخونه عوض نشده، از نو خوندن/پارس نمی‌کنیم؛ هر بار کپی تازه برمی‌گرده
+	private static List<Book> cache;
+	private static DateTime cacheStamp;
+	private static long cacheLen = -1;
+	private static readonly object cacheLock = new object();
+
+	private static List<Book> CloneAll(List<Book> src)
+	{
+		List<Book> r = new List<Book>(src.Count);
+		foreach (Book b in src)
+		{
+			r.Add(b.Clone());
+		}
+		return r;
+	}
+
+	private static void Stamp(out DateTime t, out long len)
+	{
+		try
+		{
+			FileInfo fi = new FileInfo(LibraryFilePath);
+			t = fi.LastWriteTimeUtc;
+			len = fi.Length;
+		}
+		catch
+		{
+			t = DateTime.MinValue;
+			len = -2;
+		}
+	}
+
 	public static List<Book> LoadBooks()
+	{
+		lock (cacheLock)
+		{
+			DateTime t;
+			long len;
+			Stamp(out t, out len);
+			if (cache != null && t == cacheStamp && len == cacheLen)
+			{
+				lastLoadFailed = false;
+				return CloneAll(cache);
+			}
+			List<Book> fresh = LoadBooksUncached();
+			if (!lastLoadFailed)
+			{
+				cache = CloneAll(fresh);
+				cacheStamp = t;
+				cacheLen = len;
+			}
+			else
+			{
+				cache = null;
+			}
+			return fresh;
+		}
+	}
+
+	private static List<Book> LoadBooksUncached()
 	{
 		lastLoadFailed = false;
 		if (!File.Exists(LibraryFilePath))
@@ -147,6 +205,10 @@ public static class LibraryService
 			return;
 		}
 		string json = SimpleJson.SerializeBooks(books);
+		lock (cacheLock)
+		{
+			cache = null;
+		}
 		string path = LibraryFilePath;
 		string tempPath = path + ".tmp";
 		File.WriteAllText(tempPath, json, Encoding.UTF8);

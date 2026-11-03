@@ -222,6 +222,11 @@ namespace EpubReader
                 return;
             }
             currentTheme = key;
+            if (pdfSource != null && currentLibraryBook != null)
+            {
+                // کاربر خودش رنگ انتخاب کرده: برای همین فایل ذخیره می‌شه تا دفعه‌ی بعد دوباره همون رنگ بیاد
+                AppSettings.Set("PdfLook." + currentLibraryBook.Id, "1");
+            }
             UpdateDarkModeButton();
             ReloadCurrentChapterWithNewStyle();
             SaveBookSettings();
@@ -512,6 +517,10 @@ namespace EpubReader
                 }
                 if (listBoxChapters.Items.Count > 0)
                 {
+                    if (pdfSource == null)
+                    {
+                        PrepareRestoreFor(book, startIndex);
+                    }
                     listBoxChapters.SelectedIndex = startIndex;
                 }
                 return true;
@@ -733,6 +742,119 @@ namespace EpubReader
                 txtChapterPosition.Text = Loc.F("{0} از {1}", listBoxChapters.SelectedIndex + 1, listBoxChapters.Items.Count);
                 SaveReadingProgress(listBoxChapters.SelectedIndex);
             }
+        }
+
+        // ---- ذخیره‌ی دقیق جای خواندن (داخل بخش) برای EPUB ----
+        private DispatcherTimer posSaveTimer;
+
+        private int pendingRestoreIdx = -1;
+
+        private double pendingRestoreFrac = 0.0;
+
+        private string PosKey()
+        {
+            return (currentLibraryBook != null) ? "ReadPos." + currentLibraryBook.Id : null;
+        }
+
+        private void SchedulePosSave()
+        {
+            if (pdfSource != null || currentBook == null || currentLibraryBook == null || pendingRestoreIdx >= 0)
+            {
+                return;
+            }
+            if (posSaveTimer == null)
+            {
+                posSaveTimer = new DispatcherTimer();
+                posSaveTimer.Interval = TimeSpan.FromMilliseconds(1500);
+                posSaveTimer.Tick += async (object s, EventArgs e) =>
+                {
+                    posSaveTimer.Stop();
+                    await SavePosNow();
+                };
+            }
+            posSaveTimer.Stop();
+            posSaveTimer.Start();
+        }
+
+        private async Task SavePosNow()
+        {
+            try
+            {
+                string key = PosKey();
+                if (key == null || pdfSource != null || pendingRestoreIdx >= 0)
+                {
+                    return;
+                }
+                string text = JsonToString(await RunScriptAsync("window.__rdrPos?window.__rdrPos():''"));
+                if (!string.IsNullOrEmpty(text) && text.Contains("|"))
+                {
+                    AppSettings.Set(key, text);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void PrepareRestoreFor(Book book, int startIndex)
+        {
+            pendingRestoreIdx = -1;
+            try
+            {
+                string v = AppSettings.Get("ReadPos." + book.Id, "");
+                string[] parts = v.Split('|');
+                int idx;
+                double frac;
+                if (parts.Length == 2 && int.TryParse(parts[0], out idx) && idx == startIndex
+                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out frac) && frac > 0.001)
+                {
+                    pendingRestoreIdx = idx;
+                    pendingRestoreFrac = frac;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private async void RunPendingRestore()
+        {
+            int idx = pendingRestoreIdx;
+            double frac = pendingRestoreFrac;
+            await Task.Delay(150);
+            await RunScriptAsync("window.__rdrRestore&&window.__rdrRestore(" + idx + "," + frac.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture) + ");");
+            await Task.Delay(400);
+            pendingRestoreIdx = -1;
+        }
+
+        // جای دقیق خواندن داخل صفحه (برای PDF و کمیک): اگه صفحه‌ی ذخیره‌شده همون صفحه‌ی شروع باشه، فاصله‌ی داخل صفحه هم داده می‌شه
+        private string PdfOffParam(int startPage)
+        {
+            try
+            {
+                if (currentLibraryBook == null)
+                {
+                    return "";
+                }
+                string[] parts = AppSettings.Get("ReadPos." + currentLibraryBook.Id, "").Split('|');
+                int pg;
+                double frac;
+                if (parts.Length == 2 && int.TryParse(parts[0], out pg) && pg == startPage
+                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out frac) && frac > 0.001 && frac < 1.0)
+                {
+                    return "&off=" + frac.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+                }
+            }
+            catch
+            {
+            }
+            return "";
+        }
+
+        // آیا کاربر برای این PDF رنگ/حالت صفحه انتخاب کرده؟ (پیش‌فرض: رنگ اصلی فایل، بدون فیلتر)
+        private bool IsPdfLookPicked()
+        {
+            return currentLibraryBook != null && AppSettings.Get("PdfLook." + currentLibraryBook.Id, "0") == "1";
         }
 
         private void SaveReadingProgress(int chapterIndex)
@@ -1110,11 +1232,17 @@ namespace EpubReader
             sb.Append("if(window.__rdrKeys&&window.__rdrKeys[k+':'+cc+ss+aa]){e.preventDefault();post('c|'+k+'|'+cc+'|'+ss+'|'+aa);}");
             sb.Append("},true);");
             sb.Append("document.addEventListener('contextmenu',function(e){var t=e.target;if(t&&t.tagName=='IMG'&&t.src){e.preventDefault();post('i|'+encodeURIComponent(t.src));}},true);");
+            sb.Append("document.addEventListener('click',function(e){var a=e.target;while(a&&a.tagName!='A'){a=a.parentNode;}if(!a||!a.getAttribute){return;}var h=a.getAttribute('href');if(!h){return;}if(/^(https?|mailto|tel|javascript):/i.test(h)){e.preventDefault();return;}e.preventDefault();");
+            sb.Append("if(h.charAt(0)=='#'){var cc=a.closest?a.closest('.rdr-chap'):null;post('la|'+(cc?cc.getAttribute('data-idx'):'-1')+'|'+encodeURIComponent(h.substring(1)));return;}");
+            sb.Append("post('lk|'+encodeURIComponent(a.href));},true);");
+            sb.Append("window.__rdrPos=function(){try{var d=document.documentElement,b=document.body;var st=Math.max(d.scrollTop||0,b.scrollTop||0);var cs=document.querySelectorAll('.rdr-chap');var best=null;for(var i=0;i<cs.length;i++){if(cs[i].offsetTop<=st+4){best=cs[i];}}if(!best){return '';}var h=best.offsetHeight||1;var fr=(st-best.offsetTop)/h;if(fr<0){fr=0;}if(fr>0.999){fr=0.999;}return best.getAttribute('data-idx')+'|'+fr.toFixed(4);}catch(x){return '';}};");
+            sb.Append("window.__rdrRestore=function(i,fr){try{var c=document.querySelector('.rdr-chap[data-idx=\"'+i+'\"]');if(!c){return false;}var y=c.offsetTop+(c.offsetHeight*fr);document.documentElement.scrollTop=y;document.body.scrollTop=y;return true;}catch(x){}return false;};");
+            sb.Append("window.__rdrGoAnchor=function(i,f){try{var c=document.querySelector('.rdr-chap[data-idx=\"'+i+'\"]');var t=null;if(f){var l=(c||document).querySelectorAll('[id],[name]');for(var k=0;k<l.length;k++){if(l[k].id==f||l[k].getAttribute('name')==f){t=l[k];break;}}}if(!t){t=c;}if(t){t.scrollIntoView({behavior:'smooth',block:'start'});return true;}}catch(x){}return false;};");
             sb.Append("var lt=-1,lh=-1,lc=-1,lr=-1;");
             sb.Append("function r(){try{var d=document.documentElement,b=document.body;var t=Math.round(Math.max(d.scrollTop||0,b.scrollTop||0)),h=Math.max(d.scrollHeight||0,b.scrollHeight||0),c=d.clientHeight||b.clientHeight||0;");
             sb.Append("if(t!=lt||h!=lh||c!=lc){lt=t;lh=h;lc=c;post('s|'+t+'|'+h+'|'+c);}else if(h>c){lr=t/(h-c);}}catch(x){}}");
             sb.Append("function z(){try{if(lr>=0){var d=document.documentElement,b=document.body;var h=Math.max(d.scrollHeight||0,b.scrollHeight||0),c=d.clientHeight||b.clientHeight||0;var nt=Math.round(lr*Math.max(h-c,0));d.scrollTop=nt;b.scrollTop=nt;}}catch(x){}r();}");
-            sb.Append("window.addEventListener('scroll',r);window.addEventListener('resize',z);setInterval(r,200);");
+            sb.Append("window.addEventListener('scroll',r);window.addEventListener('resize',z);setInterval(r,500);");
             sb.Append("})();</script></head><body>").Append(bodyContent).Append("</body></html>");
             return sb.ToString();
         }
@@ -1141,6 +1269,8 @@ namespace EpubReader
         {
             string body = StripScripts(ExtractBody(html));
             body = ConvertSvgImages(body);
+            // عکس‌ها بیرون از ترد اصلی دیکد بشن تا اسکرول موقع رسیدن به عکس نپره
+            body = Regex.Replace(body, "<img\\b(?![^>]*\\bdecoding=)", "<img decoding=\"async\"", RegexOptions.IgnoreCase);
             body = Regex.Replace(body, "<(?![/!?])([a-zA-Z][a-zA-Z0-9:_-]*)[^>]*>", StripSizeAttributes);
             if (absoluteFolder != null)
             {
@@ -2125,7 +2255,7 @@ namespace EpubReader
             if (pdfSource != null)
             {
                 ReaderTheme pt = GetCurrentTheme();
-                RunScriptAsync("window.__pdfTheme&&window.__pdfTheme('" + pt.Bg + "','" + pt.Text + "'," + (pt.IsDark ? "1" : "0") + ");");
+                RunScriptAsync("window.__pdfTheme&&window.__pdfTheme('" + pt.Bg + "','" + pt.Text + "'," + (pt.IsDark ? "1" : "0") + "," + (IsPdfLookPicked() ? "1" : "0") + ");");
                 return;
             }
             if (currentBook == null || listBoxChapters.SelectedIndex < 0)
@@ -2175,6 +2305,7 @@ namespace EpubReader
             sbTop = top;
             sbHeight = height;
             sbClient = client;
+            SchedulePosSave();
             if (!sbDragging)
             {
                 UpdateScrollThumb();
@@ -2439,7 +2570,7 @@ namespace EpubReader
             {
                 // آستانه‌ی چسباندن بخش بعد: ۱۲۰۰ پیکسل مانده به ته (هم‌ارز اندروید) تا بخش
                 // قبل از رسیدن کاربر به ته صفحه آماده باشد، نه بعد از آن.
-                string checkScript = "(function(){if(window.__rdrGen!==" + docGen + ")return 'x';var d=document.documentElement,b=document.body;var st=Math.max(d.scrollTop||0,b.scrollTop||0);var sh=Math.max(d.scrollHeight||0,b.scrollHeight||0);var ch=d.clientHeight||window.innerHeight;var idx=-1;var cs=b.getElementsByTagName('div');for(var i=0;i<cs.length;i++){if(cs[i].className=='rdr-chap'&&cs[i].offsetTop<=st+ch/3){idx=parseInt(cs[i].getAttribute('data-idx'),10);}}return (((st+ch)>=(sh-1200))?'1':'0')+'|'+((st<=300)?'1':'0')+'|'+idx;})();";
+                string checkScript = "(function(){if(window.__rdrGen!==" + docGen + ")return 'x';var d=document.documentElement,b=document.body;var st=Math.max(d.scrollTop||0,b.scrollTop||0);var sh=Math.max(d.scrollHeight||0,b.scrollHeight||0);var ch=d.clientHeight||window.innerHeight;var idx=-1;var cs=b.querySelectorAll('.rdr-chap');for(var i=0;i<cs.length;i++){if(cs[i].offsetTop<=st+ch/3){idx=parseInt(cs[i].getAttribute('data-idx'),10);}}return (((st+ch)>=(sh-1200))?'1':'0')+'|'+((st<=300)?'1':'0')+'|'+idx;})();";
                 string text = JsonToString(await RunScriptAsync(checkScript));
                 if (string.IsNullOrEmpty(text) || text == "x")
                 {
@@ -2741,7 +2872,7 @@ namespace EpubReader
                         }
                         PdfViewerHost.AttachComic(webBrowser1.CoreWebView2, currentBook.ExtractPath);
                         navAllowed = true;
-                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildComicUrl(currentBook.NativePages, currentBook.NativeStarts ?? new List<KeyValuePair<string, int>>(), currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()));
+                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildComicUrl(currentBook.NativePages, currentBook.NativeStarts ?? new List<KeyValuePair<string, int>>(), currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()) + PdfOffParam(startPage));
                         return;
                     }
                     if (comicMode)
@@ -2754,12 +2885,12 @@ namespace EpubReader
                         }
                         PdfViewerHost.AttachComic(webBrowser1.CoreWebView2, currentBook.ExtractPath);
                         navAllowed = true;
-                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildComicUrl(comicPages, comicStarts, currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()));
+                        webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildComicUrl(comicPages, comicStarts, currentLibraryBook != null ? currentLibraryBook.Id : "", pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom()) + PdfOffParam(startPage));
                         return;
                     }
                     PdfViewerHost.Attach(webBrowser1.CoreWebView2, pdfSource);
                     navAllowed = true;
-                    webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildUrl(pdfSource, pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom(), currentLibraryBook != null && (string.IsNullOrEmpty(currentLibraryBook.CoverImagePath) || !File.Exists(currentLibraryBook.CoverImagePath))));
+                    webBrowser1.CoreWebView2.Navigate(PdfViewerHost.BuildUrl(pdfSource, pdfTheme.Bg, pdfTheme.Text, pdfTheme.IsDark, startPage, ReadPdfZoom(), currentLibraryBook != null && (string.IsNullOrEmpty(currentLibraryBook.CoverImagePath) || !File.Exists(currentLibraryBook.CoverImagePath)), IsPdfLookPicked()) + PdfOffParam(startPage));
                 }
                 catch (Exception ex)
                 {
@@ -2900,6 +3031,14 @@ namespace EpubReader
             {
                 PushShortcutsToPage();
             }
+            else if (pendingAnchorIdx >= 0)
+            {
+                RunPendingAnchor();
+            }
+            else if (pendingRestoreIdx >= 0)
+            {
+                RunPendingRestore();
+            }
             for (int i = stalePageFiles.Count - 1; i >= 0; i--)
             {
                 try
@@ -2914,6 +3053,87 @@ namespace EpubReader
                 {
                 }
             }
+        }
+
+        private int pendingAnchorIdx = -1;
+
+        private string pendingAnchor = null;
+
+        private static string NormPathKey(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path).Replace('/', '\\').ToLowerInvariant();
+            }
+            catch
+            {
+                return (path ?? "").Replace('/', '\\').ToLowerInvariant();
+            }
+        }
+
+        // کلیک روی لینک داخل کتاب (مثل فهرست مطالب): به همون بخش (و جای لینک) می‌پره
+        private void OnBookLink(string url)
+        {
+            try
+            {
+                if (currentBook == null || pdfSource != null)
+                {
+                    return;
+                }
+                Uri u = new Uri(url);
+                if (!u.IsFile)
+                {
+                    return;
+                }
+                string target = NormPathKey(u.LocalPath);
+                string frag = Uri.UnescapeDataString((u.Fragment ?? "").TrimStart('#'));
+                for (int i = 0; i < currentBook.Chapters.Count; i++)
+                {
+                    string fp = currentBook.Chapters[i].FilePath;
+                    if (!string.IsNullOrEmpty(fp) && NormPathKey(fp) == target)
+                    {
+                        GoToChapterAnchor(i, frag);
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void GoToChapterAnchor(int idx, string frag)
+        {
+            if (currentBook == null || pdfSource != null || idx < 0 || idx >= currentBook.Chapters.Count)
+            {
+                return;
+            }
+            if (idx >= contFirst && idx <= contLast && idx == listBoxChapters.SelectedIndex)
+            {
+                RunScriptAsync("window.__rdrGoAnchor&&window.__rdrGoAnchor(" + idx + ",'" + CssQuote(frag) + "');");
+                return;
+            }
+            pendingAnchorIdx = idx;
+            pendingAnchor = frag;
+            if (listBoxChapters.SelectedIndex == idx)
+            {
+                listBoxChapters.SelectedIndex = -1;
+            }
+            listBoxChapters.SelectedIndex = idx;
+        }
+
+        private async void RunPendingAnchor()
+        {
+            int idx = pendingAnchorIdx;
+            string frag = pendingAnchor;
+            pendingAnchorIdx = -1;
+            pendingAnchor = null;
+            if (idx < 0)
+            {
+                return;
+            }
+            await Task.Delay(120);
+            await RunScriptAsync("window.__rdrGoAnchor&&window.__rdrGoAnchor(" + idx + ",'" + CssQuote(frag) + "');");
         }
 
         // پیام‌هایی که از داخل صفحه‌ی کتاب می‌رسن: s = اسکرول، k = کلید F11/Esc، c = کلید میانبر
@@ -2948,6 +3168,31 @@ namespace EpubReader
                     if (p.Length == 2 && int.TryParse(p[1], out a))
                     {
                         HandleBrowserKey(a);
+                    }
+                    break;
+                case "pf":
+                    if (p.Length == 3 && currentLibraryBook != null && pdfSource != null)
+                    {
+                        AppSettings.Set("ReadPos." + currentLibraryBook.Id, p[1] + "|" + p[2]);
+                    }
+                    break;
+                case "pk":
+                    if (p.Length == 2 && currentLibraryBook != null)
+                    {
+                        AppSettings.Set("PdfLook." + currentLibraryBook.Id, p[1] == "1" ? "1" : "0");
+                    }
+                    break;
+                case "lk":
+                    if (p.Length == 2)
+                    {
+                        OnBookLink(Uri.UnescapeDataString(p[1]));
+                    }
+                    break;
+                case "la":
+                    if (p.Length == 3 && int.TryParse(p[1], out a))
+                    {
+                        int anchorIdx = (a >= 0) ? a : listBoxChapters.SelectedIndex;
+                        GoToChapterAnchor(anchorIdx, Uri.UnescapeDataString(p[2]));
                     }
                     break;
                 case "c":

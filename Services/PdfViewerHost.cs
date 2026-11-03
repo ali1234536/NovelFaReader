@@ -413,13 +413,14 @@ public static class PdfViewerHost
 			+ "&tl=" + Uri.EscapeDataString(tl);
 	}
 
-	public static string BuildUrl(string pdfPath, string bg, string fg, bool dark, int page, double zoom = 0, bool wantCover = false)
+	public static string BuildUrl(string pdfPath, string bg, string fg, bool dark, int page, double zoom = 0, bool wantCover = false, bool picked = false)
 	{
 		string docUrl = "https://" + DocHost + "/" + Uri.EscapeDataString(Path.GetFileName(pdfPath));
 		return "https://" + ViewerHost + "/viewer.html?file=" + Uri.EscapeDataString(docUrl)
 			+ "&bg=" + Uri.EscapeDataString(bg ?? "#1c1c1e")
 			+ "&fg=" + Uri.EscapeDataString(fg ?? "#e8e8e8")
 			+ "&dark=" + (dark ? "1" : "0")
+			+ (picked ? "&pick=1" : "")
 			+ "&page=" + Math.Max(1, page)
 			+ (wantCover ? "&cover=1" : "")
 			+ (zoom > 0.3 ? "&zoom=" + zoom.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")

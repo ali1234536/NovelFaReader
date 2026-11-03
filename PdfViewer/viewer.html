@@ -13,11 +13,12 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:Ta
 #stage{display:flex;min-height:100vh;}
 #pages{flex:1 1 auto;display:flex;flex-direction:column;align-items:flex-start;padding:18px 0 96px 0;gap:var(--gap);min-width:0;}
 body.paged #pages{flex-direction:row;align-items:center;justify-content:center;gap:0;padding:12px;min-height:100vh;}
-.page{margin:0 auto;position:relative;background:var(--bg);box-shadow:0 2px 14px rgba(0,0,0,.35);border-radius:2px;flex:none;overflow:hidden;}
+.page{contain:layout paint style;margin:0 auto;position:relative;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.35);border-radius:2px;flex:none;overflow:hidden;}
 body.paged .page{margin:0;border-radius:0;}
 body.paged .page.off{display:none;}
 .page canvas{display:block;position:absolute;left:0;top:0;width:100%;height:100%;}
-body.mode-light .page:not(.photo) canvas{mix-blend-mode:multiply;}
+body.mode-dark .page,body.mode-tint .page{background:var(--bg);}
+body.mode-tint .page:not(.photo) canvas{mix-blend-mode:multiply;}
 body.mode-dark .page:not(.photo) canvas{filter:invert(1) hue-rotate(180deg);mix-blend-mode:screen;}
 .page .num{position:absolute;right:8px;top:6px;font-size:11px;opacity:.35;pointer-events:none;}
 .page .bm{position:absolute;left:10px;top:0;width:16px;height:26px;background:var(--accent);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%);display:none;z-index:3;}
@@ -66,7 +67,7 @@ body.th #stage{margin-left:132px;}
 @keyframes sp{to{transform:rotate(360deg);}}
 </style>
 </head>
-<body class="mode-dark">
+<body class="mode-light">
 <div id="prog"></div>
 <div id="msg"><div class="spin"></div><div id="msgt"></div></div>
 <div id="thumbs"></div>
@@ -105,7 +106,7 @@ body.th #stage{margin-left:132px;}
   Object.keys(tips).forEach(function(k){$(k).title=tips[k];});
   $('sq').placeholder=T.search;$('hlcopy').textContent=t('copy','Copy');$('hldel').textContent=t('del','Remove');
 
-  var pdf=null,total=0,pageEls=[],baseW=0,baseH=0,userZoom=1,invertOn=true,isDark=Q.dark==='1';
+  var pdf=null,total=0,pageEls=[],baseW=0,baseH=0,userZoom=1,invertOn=(Q.pick==='1'),isDark=Q.dark==='1';
   var queue=[],active=0,curPage=1,fp='x';
   var dpr=Math.min(2,window.devicePixelRatio||1),MAX_CANVAS=14,layT=null;
   var mode='scroll',fitMode='width',rtl=false,rot=0,coverAlone=true;
@@ -114,10 +115,9 @@ body.th #stage{margin-left:132px;}
   function store(k,v){try{if(v===undefined){return localStorage.getItem(k);}localStorage.setItem(k,v);}catch(e){return null;}}
 
   /* theme */
-  function applyMode(){body.classList.remove('mode-dark','mode-light');body.classList.add((isDark&&invertOn)?'mode-dark':'mode-light');invBtn.className=invertOn?'on':'';}
+  function applyMode(){body.classList.remove('mode-dark','mode-light','mode-tint');body.classList.add(!invertOn?'mode-light':(isDark?'mode-dark':'mode-tint'));invBtn.className=invertOn?'on':'';}
   function setTheme(bg,fg,dark){root.style.setProperty('--bg',bg);root.style.setProperty('--fg',fg);isDark=!!dark;applyMode();}
-  window.__pdfTheme=function(bg,fg,dark){setTheme(bg,fg,dark==1||dark===true);};
-  if(store('pdfInvert')==='0')invertOn=false;
+  window.__pdfTheme=function(bg,fg,dark,pick){if(pick==1||pick===true){invertOn=true;}setTheme(bg,fg,dark==1||dark===true);};
   if(Q.bg){setTheme(Q.bg,Q.fg||'#eee',isDark);}else{applyMode();}
   var sz=parseFloat(store('pdfZoom'));if(sz>0.3&&sz<5)userZoom=sz;
   var qz=parseFloat(Q.zoom);if(qz>0.3&&qz<5)userZoom=qz;
@@ -271,6 +271,20 @@ body.th #stage{margin-left:132px;}
     root.scrollTop=0;body.scrollTop=0;root.scrollLeft=0;
     updateIndicators();
   }
+  var posOK=false,pft=0;
+  function gotoOff(n,fr){
+    n=Math.max(1,Math.min(total,n|0));
+    var el=pageEls[n-1];
+    if(mode==='scroll'&&fr>0&&el){var y=pageTop(n)-10+(el.offsetHeight||0)*fr;root.scrollTop=y;body.scrollTop=y;return;}
+    goto(n,false);
+  }
+  function reportPos(){
+    if(!posOK||mode!=='scroll'||!curPage)return;
+    var el=pageEls[curPage-1];if(!el)return;
+    var fr=((root.scrollTop||body.scrollTop||0)-(pageTop(curPage)-10))/(el.offsetHeight||1);
+    if(fr<0)fr=0;if(fr>0.98)fr=0.98;
+    post('pf|'+curPage+'|'+fr.toFixed(3));
+  }
   window.__pdfGoto=function(n){goto(n,false);};
   function step(dir){
     if(mode==='scroll'){var h=(innerHeight||root.clientHeight)*0.9;root.scrollTo({top:(root.scrollTop||0)+dir*h,behavior:'smooth'});return;}
@@ -299,6 +313,7 @@ body.th #stage{margin-left:132px;}
     var tp=Math.round(Math.max(root.scrollTop||0,body.scrollTop||0)),h=Math.max(root.scrollHeight||0,body.scrollHeight||0),c=root.clientHeight||0;
     if(tp!=lt||h!=lh||c!=lc){lt=tp;lh=h;lc=c;post('s|'+tp+'|'+h+'|'+c);}
     if(mode==='scroll'){var p=currentPageFromScroll();if(p!==curPage){curPage=p;kick();}}
+    clearTimeout(pft);pft=setTimeout(reportPos,900);
     updateIndicators();
   }
   window.addEventListener('scroll',onScroll,{passive:true});
@@ -557,7 +572,7 @@ body.th #stage{margin-left:132px;}
   zoomv.onclick=function(){zoomTo(1);};
   $('bfit').onclick=cycleFit;$('bview').onclick=cycleMode;$('bthumb').onclick=toggleThumbs;$('brot').onclick=rotate;$('bbm').onclick=toggleBm;
   $('brtl').onclick=function(){rtl=!rtl;store('pdfRtl',rtl?'1':'0');$('brtl').className=rtl?'on':'';layout();};
-  invBtn.onclick=function(){invertOn=!invertOn;store('pdfInvert',invertOn?'1':'0');applyMode();};
+  invBtn.onclick=function(){invertOn=!invertOn;try{window.chrome.webview.postMessage('pk|'+(invertOn?'1':'0'));}catch(e){}applyMode();};
   $('find').onclick=openSearch;$('sclose').onclick=closeSearch;
   $('snext').onclick=function(){showMatch(S.idx+1);};$('sprev').onclick=function(){showMatch(S.idx-1);};
   sq.addEventListener('keydown',function(e){
@@ -640,7 +655,7 @@ body.th #stage{margin-left:132px;}
   function open(){
     if(!window.pdfjsLib){showMsg('<div>'+T.err+'</div>');return;}
     pdfjsLib.GlobalWorkerOptions.workerSrc='pdf.worker.min.js';
-    var task=pdfjsLib.getDocument({url:Q.file,isEvalSupported:false,enableXfa:false,cMapUrl:'cmaps/',cMapPacked:true,standardFontDataUrl:'standard_fonts/'});
+    var task=pdfjsLib.getDocument({url:Q.file,isEvalSupported:false,enableXfa:false,disableAutoFetch:true,cMapUrl:'cmaps/',cMapPacked:true,standardFontDataUrl:'standard_fonts/'});
     task.onPassword=askPassword;
     task.onProgress=function(p){if(p&&p.total>0&&msg.style.display!=='none'&&!$('pwi')){msgt.textContent=T.load+' '+Math.min(99,Math.round(100*p.loaded/p.total))+'%';}};
     task.promise.then(function(doc){
@@ -667,7 +682,9 @@ body.th #stage{margin-left:132px;}
       post('n|'+total);
       buildOutline();
       if(Q.cover==='1'){setTimeout(makeCover,800);}
-      if(start>1){setTimeout(function(){goto(start);},60);setTimeout(function(){goto(start);},500);}
+      var off0=parseFloat(Q.off)||0;
+      if(start>1||off0>0){setTimeout(function(){gotoOff(start,off0);},60);setTimeout(function(){gotoOff(start,off0);},500);}
+      setTimeout(function(){posOK=true;},(start>1||off0>0)?1000:300);
       setTimeout(function(){settled=true;tryReveal();},start>1?700:200);
       setTimeout(function(){tryReveal(true);},3500);
       onScroll();

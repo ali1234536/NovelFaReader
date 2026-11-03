@@ -29,6 +29,106 @@ public static class NativeBooks
 		return EpubParser.Load(path);
 	}
 
+	// برای افزودن به کتابخونه (سریع): بدون استخراج عکس‌ها و بدون پارس کامل؛ EPUB فقط متادیتا
+	public static EpubBook ImportInfo(string path)
+	{
+		if (!IsNative(path))
+		{
+			return EpubParser.LoadMeta(path);
+		}
+		string ext = Path.GetExtension(path).ToLowerInvariant();
+		string title = TextBookParser.NameWithoutExtension(Path.GetFileName(path));
+		EpubBook book = new EpubBook();
+		book.Title = title;
+		book.NativePath = path;
+		int count = 1;
+		if (ext == ".cbz" || ext == ".zip")
+		{
+			try
+			{
+				using (ZipArchive zip = ZipFile.OpenRead(path))
+				{
+					List<string> names = new List<string>();
+					foreach (ZipArchiveEntry e in zip.Entries)
+					{
+						names.Add(e.FullName.Replace('\\', '/'));
+					}
+					List<string> sorted = CbzParser.SortedImageNames(names);
+					if (sorted.Count == 0)
+					{
+						throw new InvalidDataException(Loc.T("این ZIP عکسی نداره (فقط CBZ/ZIPِ تصویری پشتیبانی می‌شه)."));
+					}
+					List<CbzParser.CbzChapter> chapters = CbzParser.ChaptersForEntries(sorted);
+					count = chapters.Count > 0 ? chapters.Count : (sorted.Count + CbzParser.PagesPerSection - 1) / CbzParser.PagesPerSection;
+					book.CoverImagePath = SaveComicCoverFromZip(zip, sorted[0], path);
+				}
+			}
+			catch (InvalidDataException)
+			{
+				throw;
+			}
+			catch (Exception)
+			{
+				throw new InvalidDataException(Loc.T("این فایل ZIP/CBZ خراب یا ناخوانده."));
+			}
+		}
+		else if (ext == ".txt" || ext == ".text" || ext == ".md" || ext == ".markdown" || ext == ".mdown")
+		{
+			// تخمین تعداد صفحه (هر صفحه حدود ۱۸۰۰ نویسه)؛ با اولین باز کردن مقدار دقیق جاش می‌شینه
+			try
+			{
+				count = Math.Max(1, (int)(new FileInfo(path).Length / 3000));
+			}
+			catch
+			{
+				count = 1;
+			}
+		}
+		for (int i = 0; i < count; i++)
+		{
+			book.Chapters.Add(new ChapterItem { Title = Loc.F("بخش {0}", i + 1), FilePath = null });
+		}
+		return book;
+	}
+
+	private static string SaveComicCoverFromZip(ZipArchive zip, string entryName, string sourcePath)
+	{
+		try
+		{
+			string tmp = Path.Combine(Path.GetTempPath(), "EpubCbzCover_" + Guid.NewGuid().ToString("N") + Path.GetExtension(entryName));
+			try
+			{
+				foreach (ZipArchiveEntry e in zip.Entries)
+				{
+					if (e.FullName.Replace('\\', '/') == entryName)
+					{
+						using (Stream s = e.Open())
+						using (FileStream fs = new FileStream(tmp, FileMode.Create, FileAccess.Write))
+						{
+							s.CopyTo(fs);
+						}
+						break;
+					}
+				}
+				return File.Exists(tmp) ? SaveComicCover(tmp, sourcePath) : null;
+			}
+			finally
+			{
+				try
+				{
+					File.Delete(tmp);
+				}
+				catch
+				{
+				}
+			}
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
 	public static string DocKindOf(string path)
 	{
 		switch (Path.GetExtension(path ?? "").ToLowerInvariant())
@@ -125,15 +225,46 @@ public static class NativeBooks
 					Directory.CreateDirectory(mediaDir);
 					for (int i = 0; i < sorted.Count; i++)
 					{
-						string ext = Path.GetExtension(sorted[i]).ToLowerInvariant();
-						string rel = "media/p" + (i + 1).ToString("D5", System.Globalization.CultureInfo.InvariantCulture) + ext;
-						string full = Path.Combine(work, rel.Replace('/', Path.DirectorySeparatorChar));
-						using (Stream src = byName[sorted[i]].Open())
-						using (FileStream dst = new FileStream(full, FileMode.Create, FileAccess.Write))
+						files.Add("media/p" + (i + 1).ToString("D5", System.Globalization.CultureInfo.InvariantCulture) + Path.GetExtension(sorted[i]).ToLowerInvariant());
+					}
+					// استخراج موازی (هر نخ آرشیو خودش رو باز می‌کنه چون ZipArchive چندنخی نیست)
+					int workers = Math.Max(1, Math.Min(4, Environment.ProcessorCount));
+					List<string> sortedCopy = sorted;
+					Exception failure = null;
+					System.Threading.Tasks.Parallel.For(0, workers, (int w) =>
+					{
+						try
 						{
-							src.CopyTo(dst);
+							using (ZipArchive z = ZipFile.OpenRead(path))
+							{
+								Dictionary<string, ZipArchiveEntry> map = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
+								foreach (ZipArchiveEntry e in z.Entries)
+								{
+									string n = e.FullName.Replace('\\', '/');
+									if (!map.ContainsKey(n))
+									{
+										map[n] = e;
+									}
+								}
+								for (int k = w; k < sortedCopy.Count; k += workers)
+								{
+									string full = Path.Combine(work, files[k].Replace('/', Path.DirectorySeparatorChar));
+									using (Stream src = map[sortedCopy[k]].Open())
+									using (FileStream dst = new FileStream(full, FileMode.Create, FileAccess.Write))
+									{
+										src.CopyTo(dst);
+									}
+								}
+							}
 						}
-						files.Add(rel);
+						catch (Exception ex)
+						{
+							failure = ex;
+						}
+					});
+					if (failure != null)
+					{
+						throw failure;
 					}
 					book.CoverImagePath = SaveComicCover(Path.Combine(work, files[0].Replace('/', Path.DirectorySeparatorChar)), path);
 				}

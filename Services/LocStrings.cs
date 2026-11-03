@@ -210,6 +210,8 @@ namespace EpubReader.Services
             d["بخش اخیراً بازشده"] = "Recently opened section";
             d["بخش خصوصی"] = "Private section";
             d["تغییر حالت روشن/تیره"] = "Toggle light/dark mode";
+            d["فایل پیدا نشد:"] = "File not found:";
+            d["تغییر زبان (فارسی / English)"] = "Change language (Persian / English)";
             d["بزرگ‌نمایی / بازگرداندن پنجره"] = "Maximize / restore window";
             d["کوچک کردن پنجره"] = "Minimize window";
             d["بستن برنامه"] = "Close app";

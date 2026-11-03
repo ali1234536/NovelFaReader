@@ -544,17 +544,44 @@ namespace EpubReader
         // فایل کتاب رو (اگه توی کتابخونه نیست اضافه می‌کنه) و باز می‌کنه
         public async void OpenExternalFile(string path)
         {
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            if (string.IsNullOrEmpty(path))
             {
                 return;
             }
             try
             {
+                // فایل ممکنه هنوز در حال کپی/قفل باشه (مثلاً آنتی‌ویروس)؛ چند بار صبر می‌کنیم
+                for (int wait = 0; wait < 10 && !File.Exists(path); wait++)
+                {
+                    await Task.Delay(200);
+                }
+                if (!File.Exists(path))
+                {
+                    LibraryService.LogOpen("[External] file not found: " + path);
+                    DarkMessageBox.Show(Loc.T("فایل پیدا نشد:") + "\n" + path, Loc.T("خطا"), MessageBoxButton.OK, MessageBoxImage.Hand);
+                    return;
+                }
+                LibraryService.LogOpen("[External] open: " + path);
                 string libPath = path;
                 Book target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, libPath, StringComparison.OrdinalIgnoreCase));
                 if (target == null)
                 {
-                    Book importedBook = await Task.Run(() => ImportEpub(path));
+                    Book importedBook = null;
+                    for (int attempt = 0; attempt < 3 && importedBook == null; attempt++)
+                    {
+                        try
+                        {
+                            importedBook = await Task.Run(() => ImportEpub(libPath));
+                        }
+                        catch (IOException)
+                        {
+                            await Task.Delay(400);
+                        }
+                    }
+                    if (importedBook == null)
+                    {
+                        importedBook = await Task.Run(() => ImportEpub(libPath));
+                    }
                     LibraryService.AddOrUpdateBook(importedBook);
                     LoadLibrary();
                     target = LibraryService.LoadBooks().Find((Book b) => string.Equals(b.FilePath, libPath, StringComparison.OrdinalIgnoreCase));
@@ -566,7 +593,8 @@ namespace EpubReader
             }
             catch (Exception ex)
             {
-                DarkMessageBox.Show(Loc.T("خطا در باز کردن فایل:\n") + ex.Message, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
+                LibraryService.LogOpen("[External] FAILED: " + path + " | " + ex);
+                DarkMessageBox.Show(Loc.T("خطا در باز کردن فایل:\n") + ex.Message + "\n\n" + path, "خطا", MessageBoxButton.OK, MessageBoxImage.Hand);
             }
         }
         private void SetBackdrop(bool on)
@@ -1601,6 +1629,9 @@ namespace EpubReader
                 case "lib.theme":
                     btnTheme_Click(btnTheme, args);
                     break;
+                case "lib.language":
+                    ChangeLanguage(Loc.IsEnglish ? Loc.Fa : Loc.En);
+                    break;
                 case "lib.maximize":
                     ToggleMaximizeOrExit();
                     break;
@@ -2034,13 +2065,16 @@ namespace EpubReader
         // خوندن EPUB و ساختن Book؛ روی نخ پس‌زمینه اجرا می‌شه تا برنامه قفل نکنه
         private static Book ImportEpub(string path)
         {
-            EpubBook epub = NativeBooks.Open(path);
-            try
+            EpubBook epub = NativeBooks.ImportInfo(path);
+            if (!string.IsNullOrEmpty(epub.ExtractPath))
             {
-                Directory.Delete(epub.ExtractPath, true);
-            }
-            catch
-            {
+                try
+                {
+                    Directory.Delete(epub.ExtractPath, true);
+                }
+                catch
+                {
+                }
             }
             Book book = new Book();
             book.Id = Guid.NewGuid().ToString("N");
@@ -2107,13 +2141,32 @@ namespace EpubReader
                         toImport.Add(f);
                     }
                 }
+                // خوندن اطلاعات کتاب‌ها موازی (۳ تا همزمان)؛ ثبت توی کتابخونه پشت‌سرهم و به ترتیب
+                System.Threading.SemaphoreSlim importGate = new System.Threading.SemaphoreSlim(3);
+                List<Task<Book>> importJobs = new List<Task<Book>>();
+                foreach (string importPath in toImport)
+                {
+                    string pathCopy = importPath;
+                    importJobs.Add(Task.Run(async () =>
+                    {
+                        await importGate.WaitAsync();
+                        try
+                        {
+                            return ImportEpub(pathCopy);
+                        }
+                        finally
+                        {
+                            importGate.Release();
+                        }
+                    }));
+                }
                 for (int i = 0; i < toImport.Count; i++)
                 {
                     string path = toImport[i];
                     ShowBusy(Loc.F("در حال افزودن {0} از {1}…", i + 1, toImport.Count), i * 100.0 / toImport.Count);
                     try
                     {
-                        Book imported = await Task.Run(() => ImportEpub(path));
+                        Book imported = await importJobs[i];
                         if (!string.IsNullOrEmpty(targetCollection))
                         {
                             imported.CollectionName = targetCollection;

@@ -207,7 +207,7 @@ namespace EpubReader
                 string progId = "EpubReaderApp.epub";
                 string commandKeyPath = @"Software\Classes\" + progId + @"\shell\open\command";
 
-                foreach (string extra in new string[] { ".pdf", ".txt", ".md", ".docx" })
+                foreach (string extra in new string[] { ".pdf", ".txt", ".md", ".docx", ".cbz" })
                 {
                     using (RegistryKey k = Registry.CurrentUser.CreateSubKey("Software\\Classes\\" + extra + "\\OpenWithProgids"))
                     {

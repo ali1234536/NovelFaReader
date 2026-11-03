@@ -330,11 +330,6 @@
                 <Setter Property="Border.CornerRadius" Value="16" />
                 <Setter Property="FrameworkElement.Cursor" Value="Hand" />
                 <Setter Property="local:CardMotion.Enabled" Value="True" />
-                <Setter Property="UIElement.Effect">
-                    <Setter.Value>
-                        <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="14" ShadowDepth="3" Opacity="0.35" RenderingBias="Performance" />
-                    </Setter.Value>
-                </Setter>
                 <Style.Triggers>
                     <Trigger Property="UIElement.IsMouseOver" Value="True">
                         <Setter Property="BorderBrush" Value="{DynamicResource AccentColor}" />

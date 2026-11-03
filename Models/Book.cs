@@ -66,5 +66,10 @@ public class Book
 			return Math.Min(100.0, (double)(LastChapterIndex + 1) * 100.0 / (double)TotalChapters);
 		}
 	}
+
+	public Book Clone()
+	{
+		return (Book)MemberwiseClone();
+	}
 }
 }

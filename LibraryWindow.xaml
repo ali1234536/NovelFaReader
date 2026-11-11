@@ -28,6 +28,10 @@
                                         </Path.Data>
                                     </Path>
                                 </Grid>
+                                <Grid Visibility="{DynamicResource ThemeLavaVisibility}" IsHitTestVisible="False">
+                                    <Path Visibility="{Binding BiteVisibility}" Fill="{DynamicResource BgCard}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="24" Height="24" IsHitTestVisible="False" Data="M0,0 L24,0 L16,6 L19,11 L10,14 L12,19 L6,18 L0,24 Z" />
+                                    <Path Visibility="{Binding BiteVisibility}" Stroke="{DynamicResource AccentColor}" StrokeThickness="1.4" HorizontalAlignment="Left" VerticalAlignment="Top" Width="24" Height="24" IsHitTestVisible="False" Data="M24,0 L16,6 L19,11 L10,14 L12,19 L6,18 L0,24" />
+                                </Grid>
                             </Grid>
                         </Border>
                         <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center">
@@ -302,6 +306,7 @@
             </DockPanel>
             <ScrollViewer Name="booksScroll" Grid.Row="2" Style="{StaticResource ModernScrollViewer}" Margin="0,0,8,8">
                 <StackPanel Margin="36,8,28,24">
+                    <WrapPanel Name="statusBarBooks" Margin="0,0,0,18" Visibility="Collapsed" />
                     <Grid Name="statsStrip" Margin="0,0,0,24">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -419,9 +424,6 @@
                         </Grid>
                     </Grid>
                     <Border Name="heroCard" Background="{DynamicResource HeroGradient}" CornerRadius="20" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" Padding="0" Margin="0,0,0,32" Visibility="Collapsed">
-                        <UIElement.Effect>
-                            <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="30" ShadowDepth="6" Opacity="0.45" RenderingBias="Performance" />
-                        </UIElement.Effect>
                         <Grid>
                             <Border Background="{DynamicResource AccentColor}" Opacity="0.32" IsHitTestVisible="False" CornerRadius="19">
                                 <Border.OpacityMask>
@@ -447,9 +449,6 @@
                                         <UIElement.RenderTransform>
                                             <RotateTransform Angle="4" />
                                         </UIElement.RenderTransform>
-                                        <UIElement.Effect>
-                                            <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="20" ShadowDepth="6" Opacity="0.6" RenderingBias="Performance" />
-                                        </UIElement.Effect>
                                         <Image Name="imgHeroCover" Stretch="UniformToFill" />
                                     </Border>
                                 </Grid>
@@ -477,10 +476,14 @@
                                 <Path Data="M4,60 L60,4" Stroke="{DynamicResource AccentColor}" StrokeThickness="1.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.9" />
                                 <Path Data="M4,60 L60,4" Stroke="{DynamicResource AccentColor}" StrokeThickness="9" StrokeDashArray="0.18 1.2" Opacity="0.9" />
                             </Grid>
+                            <Path Visibility="{DynamicResource ThemeLavaVisibility}" IsHitTestVisible="False" Data="M18,0 L12,9 L19,17 L9,29 L16,38 L7,52 L15,61 L10,73 L18,84 L12,100" Stretch="Fill" Width="24" HorizontalAlignment="Left" Margin="155,0,0,0" Stroke="{DynamicResource AccentColor}" StrokeThickness="7" StrokeLineJoin="Round" Opacity="0.22" />
+                            <Path Visibility="{DynamicResource ThemeLavaVisibility}" IsHitTestVisible="False" Data="M18,0 L12,9 L19,17 L9,29 L16,38 L7,52 L15,61 L10,73 L18,84 L12,100" Stretch="Fill" Width="24" HorizontalAlignment="Left" Margin="155,0,0,0" Stroke="{DynamicResource AccentColor}" StrokeThickness="1.6" StrokeLineJoin="Miter" Opacity="0.95" />
+                            <Path Visibility="{DynamicResource ThemeLavaVisibility}" IsHitTestVisible="False" Data="M60,8 L52,22 L58,30 L46,44 L52,52 L40,66 L46,74" Stretch="None" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,40,14" Stroke="{DynamicResource AccentColor}" StrokeThickness="1.6" StrokeLineJoin="Miter" Opacity="0.8" />
                         </Grid>
                     </Border>
                     <DockPanel Margin="0,0,0,16">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Name="btnSelectMode" Content="انتخاب" Style="{StaticResource SoftButton}" Height="36" Padding="14,0" Margin="0,0,10,0" Cursor="Hand" Click="btnSelectMode_Click" ToolTip="انتخاب چند کتاب برای حذف گروهی" />
                             <ComboBox Name="cmbSort" Width="190" Height="36" FontSize="12" Margin="0,0,10,0" SelectionChanged="cmbSort_SelectionChanged">
                                 <ComboBoxItem Content="مرتب‌سازی: پیش‌فرض" IsSelected="True" />
                                 <ComboBoxItem Content="تازه‌ترین اضافه‌شده" />
@@ -506,6 +509,7 @@
                     <TextBlock Name="txtEmpty" Text="اینجا هنوز کتابی نیست&#10;فایل‌های کتاب رو بکش و اینجا رها کن" TextAlignment="Center" LineHeight="26" Foreground="{DynamicResource TextMuted}" FontSize="14" HorizontalAlignment="Center" Margin="0,60,0,0" Visibility="Collapsed" />
                     <Border Name="selBar" Visibility="Collapsed" CornerRadius="12" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentColor}" BorderThickness="1" Padding="14,8" Margin="0,0,0,12">
                         <DockPanel LastChildFill="True">
+                            <Button Name="btnSelAll" DockPanel.Dock="Right" Content="انتخاب همه" Padding="12,4" Margin="8,0,0,0" Cursor="Hand" Click="btnSelAll_Click" />
                             <Button Name="btnSelCancel" DockPanel.Dock="Right" Content="لغو" Padding="12,4" Margin="8,0,0,0" Cursor="Hand" Click="btnSelCancel_Click" />
                             <Button Name="btnSelDelete" DockPanel.Dock="Right" Content="حذف از کتابخانه" Padding="12,4" Cursor="Hand" Click="btnSelDelete_Click" />
                             <TextBlock Name="txtSelCount" VerticalAlignment="Center" Foreground="{DynamicResource TextColor}" FontWeight="Bold" />
@@ -549,6 +553,10 @@
                                                                 </Path.Data>
                                                             </Path>
                                                             <Path Visibility="{Binding BiteVisibility}" Fill="{DynamicResource TextMuted}" Opacity="0.55" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="48,50,0,0" Width="22" Height="14" IsHitTestVisible="False" Data="M2,3 L5,1 L6,4 Z M12,8 L15,6 L16,9 Z M6,11 L8,9 L10,11 Z" />
+                                                        </Grid>
+                                                        <Grid Visibility="{DynamicResource ThemeLavaVisibility}" IsHitTestVisible="False">
+                                                            <Path Visibility="{Binding BiteVisibility}" Fill="{DynamicResource BgDark}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="56" Height="56" IsHitTestVisible="False" Data="M0,0 L56,0 L38,14 L44,26 L24,32 L28,44 L14,42 L0,56 Z" />
+                                                            <Path Visibility="{Binding BiteVisibility}" Stroke="{DynamicResource AccentColor}" StrokeThickness="2" HorizontalAlignment="Left" VerticalAlignment="Top" Width="56" Height="56" IsHitTestVisible="False" Data="M56,0 L38,14 L44,26 L24,32 L28,44 L14,42 L0,56" />
                                                         </Grid>
                                                         <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AccentColor}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Visibility="{Binding FavoriteVisibility}" IsHitTestVisible="False">
                                                             <Path Style="{StaticResource IcoFill}" Data="{StaticResource IcoHeart}" Fill="{DynamicResource OnAccent}" HorizontalAlignment="Center" />
@@ -631,6 +639,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid.Resources>
@@ -678,8 +687,9 @@
                         </StackPanel>
                     </Button>
                 </WrapPanel>
-                <ListBox Name="collectionList" Grid.Row="3" Background="Transparent" BorderThickness="0" Padding="0,0,8,0" ItemContainerStyle="{StaticResource CollectionItemStyle}" ItemTemplate="{StaticResource CollectionRowTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True" />
-                <TextBlock Name="txtCollectionsEmpty" Grid.Row="3" Text="هنوز مجموعه‌ای نساختی. روی «مجموعه‌ی جدید» بزن." Foreground="{DynamicResource TextMuted}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
+                <WrapPanel Name="statusBarColl" Grid.Row="3" Margin="0,0,0,12" />
+                <ListBox Name="collectionList" Grid.Row="4" Background="Transparent" BorderThickness="0" Padding="0,0,8,0" ItemContainerStyle="{StaticResource CollectionItemStyle}" ItemTemplate="{StaticResource CollectionRowTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True" />
+                <TextBlock Name="txtCollectionsEmpty" Grid.Row="4" Text="هنوز مجموعه‌ای نساختی. روی «مجموعه‌ی جدید» بزن." Foreground="{DynamicResource TextMuted}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
         </Grid>
         <Border Name="dimOverlay" Grid.ColumnSpan="2" Background="#B30F0E17" Visibility="Collapsed" />

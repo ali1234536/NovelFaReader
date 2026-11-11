@@ -27,6 +27,9 @@ namespace EpubReader
 
         private string currentTab = "all";
 
+        // وقتی روی یکی از وضعیت‌ها (بعداً می‌خونم، در حال خواندن، ...) کلیک می‌شه، currentTab = "status" و اسم وضعیت اینجاست
+        private string statusFilter = "";
+
         public static bool PrivateUnlockedThisSession = false;
 
         private Book heroBook;
@@ -700,7 +703,7 @@ namespace EpubReader
             selectedPaths.Clear();
             if (selBar != null)
             {
-                selBar.Visibility = Visibility.Collapsed;
+                selBar.Visibility = selectMode ? Visibility.Visible : Visibility.Collapsed;
             }
             LoadBooksOnly();
             ApplyFilter();
@@ -756,9 +759,31 @@ namespace EpubReader
             g.Clip = clip;
         }
 
+        private const int CardBatch = 24;
+        private List<LibraryCardItem> pendingCards;
+        private System.Collections.ObjectModel.ObservableCollection<LibraryCardItem> shownCards;
+        private bool scrollHooked;
+
+        // کارت‌ها تکه‌تکه ساخته می‌شن تا اسکرول و باز شدن کتابخونه سنگین نشه
+        private void BooksScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            try
+            {
+                if (pendingCards == null || shownCards == null || shownCards.Count >= pendingCards.Count) { return; }
+                if (booksScroll.ScrollableHeight - booksScroll.VerticalOffset > booksScroll.ViewportHeight * 1.5) { return; }
+                int to = Math.Min(shownCards.Count + CardBatch, pendingCards.Count);
+                for (int i = shownCards.Count; i < to; i++) { shownCards.Add(pendingCards[i]); }
+            }
+            catch { }
+        }
+
         private void CardRoot_Loaded(object sender, RoutedEventArgs e)
         {
             FrameworkElement card = sender as FrameworkElement;
+            if (card != null && selectedPaths.Count > 0)
+            {
+                try { ApplySelectionVisual(card); } catch { }
+            }
             if (card == null || card.Opacity > 0.99)
             {
                 return;
@@ -780,7 +805,8 @@ namespace EpubReader
                         index = found;
                     }
                 }
-                TimeSpan delay = TimeSpan.FromMilliseconds(Math.Min(index, 14) * 35);
+                if (index >= 14) { card.Opacity = 1.0; return; }
+                TimeSpan delay = TimeSpan.FromMilliseconds(index * 35);
                 Duration duration = new Duration(TimeSpan.FromMilliseconds(320));
                 QuadraticEase ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
 
@@ -815,6 +841,15 @@ namespace EpubReader
                 bool collectionsTab = currentTab == "collections";
                 collectionsPanel.Visibility = collectionsTab ? Visibility.Visible : Visibility.Collapsed;
                 booksScroll.Visibility = collectionsTab ? Visibility.Collapsed : Visibility.Visible;
+                if (statusBarBooks != null)
+                {
+                    bool statusTab = currentTab == "status";
+                    statusBarBooks.Visibility = statusTab ? Visibility.Visible : Visibility.Collapsed;
+                    if (statusTab)
+                    {
+                        BuildStatusChips(statusBarBooks, statusFilter);
+                    }
+                }
                 if (collectionsTab)
                 {
                     RefreshCollectionsPanel();
@@ -840,6 +875,9 @@ namespace EpubReader
                         break;
                     case "favorites":
                         filteredBooks = filteredBooks.Where((Book book) => book.IsFavorite);
+                        break;
+                    case "status":
+                        filteredBooks = filteredBooks.Where((Book book) => string.Equals(book.CollectionName, statusFilter, StringComparison.OrdinalIgnoreCase));
                         break;
                     case "recent":
                         filteredBooks = from book in filteredBooks
@@ -901,13 +939,17 @@ namespace EpubReader
                     cardItems.Add(BuildSingleCard(b2));
                 }
             }
-            listBoxBooks.ItemsSource = null;
-            listBoxBooks.ItemsSource = cardItems;
+            pendingCards = cardItems;
+            shownCards = new System.Collections.ObjectModel.ObservableCollection<LibraryCardItem>();
+            int firstBatch = Math.Min(CardBatch, cardItems.Count);
+            for (int ci = 0; ci < firstBatch; ci++) { shownCards.Add(cardItems[ci]); }
+            listBoxBooks.ItemsSource = shownCards;
+            if (!scrollHooked) { scrollHooked = true; booksScroll.ScrollChanged += BooksScroll_ScrollChanged; }
             txtEmpty.Visibility = ((cardItems.Count != 0) ? Visibility.Collapsed : Visibility.Visible);
             UpdateHero(currentTab == "all" && !isSearching);
             UpdateStats();
             statsStrip.Visibility = ((currentTab == "all" && !isSearching && books.Any((Book book) => !book.IsPrivate)) ? Visibility.Visible : Visibility.Collapsed);
-            string section = GetSectionTitle(currentTab);
+            string section = (currentTab == "status") ? statusFilter : GetSectionTitle(currentTab);
             txtSectionTitle.Text = Loc.T(isSearching ? "نتایج جستجو" : section);
             txtSectionCount.Text = Loc.FN("{0} کتاب", bookList.Count, bookList.Count);
         }
@@ -991,7 +1033,7 @@ namespace EpubReader
 
         private void SetTabAppearance(Button button, string tabKey, Brush selectedBg, Brush normalBg, Brush selectedFg, Brush normalFg)
         {
-            bool isSelected = currentTab == tabKey;
+            bool isSelected = currentTab == tabKey || (tabKey == "collections" && currentTab == "status");
             button.Background = (isSelected ? selectedBg : normalBg);
             button.Foreground = (isSelected ? selectedFg : normalFg);
             button.FontWeight = (isSelected ? FontWeights.SemiBold : FontWeights.Normal);
@@ -1265,6 +1307,7 @@ namespace EpubReader
         // ---------- مجموعه‌ها: ساختن دستی مجموعه با اسم دلخواه و گذاشتن EPUB توش ----------
         private List<CollectionRow> BuildCollectionRows(bool applySearch)
         {
+            CollectionRegistry.EnsurePresets();
             string query = (applySearch && txtSearch != null && txtSearch.Text != null) ? txtSearch.Text.Trim() : "";
             Dictionary<string, int> counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (string name in CollectionRegistry.Load())
@@ -1281,9 +1324,22 @@ namespace EpubReader
                 counts.TryGetValue(b.CollectionName, out n);
                 counts[b.CollectionName] = n + ((!b.IsPrivate || PrivateUnlockedThisSession) ? 1 : 0);
             }
+            // مجموعه‌های وضعیت (بعداً می‌خونم، ...) بالای صفحه به شکل دکمه نشون داده می‌شن، نه توی لیست
+            HashSet<string> presetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (applySearch)
+            {
+                foreach (string preset in CollectionRegistry.Presets)
+                {
+                    presetNames.Add(Loc.T(preset));
+                }
+            }
             List<CollectionRow> rows = new List<CollectionRow>();
             foreach (KeyValuePair<string, int> kv in counts)
             {
+                if (presetNames.Contains(kv.Key))
+                {
+                    continue;
+                }
                 if (query.Length > 0 && kv.Key.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
                 {
                     continue;
@@ -1292,6 +1348,76 @@ namespace EpubReader
             }
             rows.Sort((CollectionRow x, CollectionRow y) => NaturalStringComparer.Instance.Compare(x.Name, y.Name));
             return rows;
+        }
+
+        // دکمه‌های افقی بالا: همه‌ی مجموعه‌ها + وضعیت‌ها (با تعداد کتاب). selected = null یعنی «همه‌ی مجموعه‌ها»
+        private void BuildStatusChips(Panel host, string selected)
+        {
+            if (host == null)
+            {
+                return;
+            }
+            host.Children.Clear();
+            CollectionRegistry.EnsurePresets();
+            host.Children.Add(MakeStatusChip(Loc.T("همه‌ی مجموعه‌ها"), "", selected == null));
+            foreach (string preset in CollectionRegistry.Presets)
+            {
+                string name = Loc.T(preset);
+                int count = 0;
+                foreach (Book b in books)
+                {
+                    if (!b.IsPrivate && string.Equals(b.CollectionName, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        count++;
+                    }
+                }
+                host.Children.Add(MakeStatusChip(name + "  ·  " + count, name, selected != null && string.Equals(selected, name, StringComparison.OrdinalIgnoreCase)));
+            }
+            if (selected != null && selected.Length > 0 && ReferenceEquals(host, statusBarBooks))
+            {
+                // دکمه‌ی افزودن: فایل‌های کتاب رو انتخاب می‌کنی و مستقیم توی همین بخش گذاشته می‌شن
+                Button add = new Button();
+                add.Content = "＋  " + Loc.T("افزودن کتاب به این بخش");
+                add.Style = (Style)FindResource("ModernButton");
+                add.Padding = new Thickness(14, 7, 14, 7);
+                add.Margin = new Thickness(8, 0, 8, 8);
+                add.Click += (object s2, RoutedEventArgs e2) => AddFilesToCollection(statusFilter);
+                host.Children.Add(add);
+            }
+        }
+
+        private Button MakeStatusChip(string text, string name, bool selected)
+        {
+            Button chip = new Button();
+            chip.Content = text;
+            chip.Tag = name;
+            chip.Style = (Style)FindResource(selected ? "ModernButton" : "SoftButton");
+            chip.Padding = new Thickness(14, 7, 14, 7);
+            chip.Margin = new Thickness(0, 0, 8, 8);
+            chip.Click += StatusChip_Click;
+            return chip;
+        }
+
+        private void StatusChip_Click(object sender, RoutedEventArgs e)
+        {
+            Button chip = sender as Button;
+            if (chip == null)
+            {
+                return;
+            }
+            string name = (chip.Tag as string) ?? "";
+            if (name.Length == 0)
+            {
+                currentTab = "collections";
+                statusFilter = "";
+            }
+            else
+            {
+                currentTab = "status";
+                statusFilter = name;
+            }
+            UpdateTabStyles();
+            ApplyFilterAnimated(false);
         }
 
         private void UpdateCollectionsCount()
@@ -1307,6 +1433,7 @@ namespace EpubReader
         private void RefreshCollectionsPanel()
         {
             List<CollectionRow> rows = BuildCollectionRows(true);
+            BuildStatusChips(statusBarColl, null);
             collectionList.ItemsSource = null;
             collectionList.ItemsSource = rows;
             txtCollectionsEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1435,7 +1562,10 @@ namespace EpubReader
         private static readonly string[][] secretThemeCodes = new string[][]
         {
             new string[] { "BEAKO", "beatrice" },
-            new string[] { "EMT", "emilia" }
+            new string[] { "EMT", "emilia" },
+            new string[] { "TEA", "echidna" },
+            new string[] { "TSUGI", "tsugi" },
+            new string[] { "PEIDE", "reif" }
         };
 
         // اگه این کلید آخرین حرف یک ترفند باشه true برمی‌گردونه (و خودش کلید رو می‌خوره)
@@ -2190,7 +2320,7 @@ namespace EpubReader
 
             if (added > 0)
             {
-                if (currentTab != "all" && currentTab != "collections")
+                if (currentTab != "all" && currentTab != "collections" && currentTab != "status")
                 {
                     currentTab = "all";
                     UpdateTabStyles();
@@ -2296,7 +2426,7 @@ namespace EpubReader
             if (item != null)
             {
                 bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-                if (!item.IsCollection && item.SingleBook != null && (ctrl || selectedPaths.Count > 0))
+                if (!item.IsCollection && item.SingleBook != null && (ctrl || selectMode || selectedPaths.Count > 0))
                 {
                     ToggleSelection(item.SingleBook, fe as Border);
                     return;
@@ -2344,7 +2474,9 @@ namespace EpubReader
 
         private void UpdateSelectionBar()
         {
-            selBar.Visibility = selectedPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            selBar.Visibility = (selectMode || selectedPaths.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+            btnSelectMode.Content = Loc.T(selectMode ? "پایان انتخاب" : "انتخاب");
+            btnSelAll.Content = Loc.T("انتخاب همه");
             txtSelCount.Text = Loc.FN("{0} کتاب انتخاب شد", selectedPaths.Count, selectedPaths.Count);
             btnSelDelete.Content = Loc.T("حذف از کتابخانه");
             btnSelCancel.Content = Loc.T("لغو");
@@ -2366,7 +2498,63 @@ namespace EpubReader
 
         private void btnSelCancel_Click(object sender, RoutedEventArgs e)
         {
+            selectMode = false;
             ClearSelection();
+        }
+
+        private bool selectMode;
+
+        private void btnSelectMode_Click(object sender, RoutedEventArgs e)
+        {
+            selectMode = !selectMode;
+            if (!selectMode) { ClearSelection(); } else { UpdateSelectionBar(); }
+        }
+
+        private void btnSelAll_Click(object sender, RoutedEventArgs e)
+        {
+            if (pendingCards == null) { return; }
+            foreach (LibraryCardItem it in pendingCards)
+            {
+                if (!it.IsCollection && it.SingleBook != null && !selectedPaths.ContainsKey(it.SingleBook.FilePath))
+                {
+                    selectedPaths[it.SingleBook.FilePath] = null;
+                }
+            }
+            ApplySelectionVisual(listBoxBooks);
+            UpdateSelectionBar();
+        }
+
+        private Border FindCardBorder(DependencyObject root)
+        {
+            int n = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < n; i++)
+            {
+                DependencyObject c = VisualTreeHelper.GetChild(root, i);
+                Border b = c as Border;
+                if (b != null && b.Tag is LibraryCardItem) { return b; }
+                Border r = FindCardBorder(c);
+                if (r != null) { return r; }
+            }
+            return null;
+        }
+
+        private void ApplySelectionVisual(DependencyObject root)
+        {
+            if (selectedPaths.Count == 0) { return; }
+            int n = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < n; i++)
+            {
+                DependencyObject c = VisualTreeHelper.GetChild(root, i);
+                Border b = c as Border;
+                LibraryCardItem it = (b != null) ? (b.Tag as LibraryCardItem) : null;
+                if (it != null && it.SingleBook != null && selectedPaths.ContainsKey(it.SingleBook.FilePath))
+                {
+                    b.BorderBrush = (Brush)FindResource("AccentColor");
+                    b.BorderThickness = new Thickness(3);
+                    selectedPaths[it.SingleBook.FilePath] = b;
+                }
+                else { ApplySelectionVisual(c); }
+            }
         }
 
         private void btnSelDelete_Click(object sender, RoutedEventArgs e)
@@ -2530,7 +2718,16 @@ namespace EpubReader
             }
             try
             {
-                prewarmedReader = new MainWindow();
+                MainWindow warmed = new MainWindow();
+                prewarmedReader = warmed;
+                // اگه این پنجره‌ی آماده‌شده جایی بسته شد (مثلاً با باز کردن فایل از بیرون)، دیگه نباید برای باز کردن کتاب استفاده بشه
+                warmed.Closed += (object s2, EventArgs e2) =>
+                {
+                    if (ReferenceEquals(prewarmedReader, warmed))
+                    {
+                        prewarmedReader = null;
+                    }
+                };
             }
             catch
             {
@@ -2627,6 +2824,37 @@ namespace EpubReader
                 MenuItem collectionMenuItem = menuItem;
                 collectionMenuItem.Click += AddToCollection_Click;
                 contextMenu.Items.Add(collectionMenuItem);
+                // وضعیت کتاب: بعداً می‌خونم / در حال خواندن / نگه داشتم / رها کردم / تمام شد
+                CollectionRegistry.EnsurePresets();
+                MenuItem statusMenu = new MenuItem();
+                statusMenu.Header = Loc.T("وضعیت کتاب");
+                foreach (string preset in CollectionRegistry.Presets)
+                {
+                    string presetName = Loc.T(preset);
+                    MenuItem st = new MenuItem();
+                    st.Header = presetName;
+                    st.IsChecked = string.Equals(book.CollectionName, presetName, StringComparison.OrdinalIgnoreCase);
+                    st.Click += (object s, RoutedEventArgs args) =>
+                    {
+                        CollectionRegistry.Add(presetName);
+                        LibraryService.SetCollection(book.FilePath, presetName);
+                        LoadLibrary();
+                    };
+                    statusMenu.Items.Add(st);
+                }
+                if (!string.IsNullOrEmpty(book.CollectionName))
+                {
+                    statusMenu.Items.Add(new Separator());
+                    MenuItem clear = new MenuItem();
+                    clear.Header = Loc.T("بدون مجموعه");
+                    clear.Click += (object s, RoutedEventArgs args) =>
+                    {
+                        LibraryService.RemoveFromCollection(book.FilePath);
+                        LoadLibrary();
+                    };
+                    statusMenu.Items.Add(clear);
+                }
+                contextMenu.Items.Add(statusMenu);
                 MenuItem favItem = new MenuItem();
                 favItem.Header = Loc.T(book.IsFavorite ? "حذف از علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها");
                 favItem.Tag = book;

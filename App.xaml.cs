@@ -175,7 +175,7 @@ namespace EpubReader
                     return;
                 }
 
-                foreach (Window w in Windows.OfType<Window>().Where((Window x) => x is MainWindow || x is CollectionWindow).ToList())
+                foreach (Window w in Windows.OfType<Window>().Where((Window x) => (x is MainWindow || x is CollectionWindow) && x.IsVisible).ToList())
                 {
                     try
                     {
@@ -189,7 +189,9 @@ namespace EpubReader
                 {
                     library.WindowState = WindowState.Normal;
                 }
-                library.OpenExternalFile(path);
+                // بعد از بسته شدن پنجره‌ی قبلی و تموم شدن کارهای صفحه، فایل جدید باز بشه (نه وسط همون پردازش)
+                string openPath = path;
+                Dispatcher.BeginInvoke(new Action(() => library.OpenExternalFile(openPath)), System.Windows.Threading.DispatcherPriority.Background);
             }
             catch (Exception ex)
             {

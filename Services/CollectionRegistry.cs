@@ -46,6 +46,28 @@ public static class CollectionRegistry
 		}
 	}
 
+	// مجموعه‌های آماده برای دسته‌بندی وضعیت کتاب‌ها (یک بار ساخته می‌شن؛ اگه کاربر پاکشون کرد برنمی‌گردن)
+	public static readonly string[] Presets = new string[] { "بعداً می‌خونم", "در حال خواندن", "نگه داشتم", "رها کردم", "تمام شد" };
+
+	public static void EnsurePresets()
+	{
+		try
+		{
+			if (AppSettings.Get("CollectionPresets", "0") == "1")
+			{
+				return;
+			}
+			foreach (string p in Presets)
+			{
+				Add(Loc.T(p));
+			}
+			AppSettings.Set("CollectionPresets", "1");
+		}
+		catch
+		{
+		}
+	}
+
 	public static List<string> Load()
 	{
 		List<string> names = new List<string>();

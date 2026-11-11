@@ -179,6 +179,9 @@
                             </Popup>
                             <Border Width="1" Height="20" Background="{DynamicResource BorderColor}" Margin="10,0" />
                             <StackPanel Name="ThemePanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0" />
+                            <Button Name="btnBookSearch" Background="#00FFFFFF" Padding="10,6" ToolTip="جستجو در کتاب (Ctrl+F)" Click="btnBookSearch_Click">
+                                <Path Style="{StaticResource Ico}" Data="{StaticResource IcoSearch}" />
+                            </Button>
                             <Button Name="btnFullScreen" Background="#00FFFFFF" Padding="10,6" ToolTip="{Binding Text, ElementName=txtFullScreen}" Click="btnFullScreen_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Name="icoFullScreen" Style="{StaticResource Ico}" Data="{StaticResource IcoFullscreen}" />

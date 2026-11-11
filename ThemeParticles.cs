@@ -209,6 +209,12 @@ public sealed class ThemeParticleLayer : Canvas
 				count = 18; sizeMin = 5.0; sizeMax = 11.0; durMin = 12.0; durMax = 24.0; peak = 0.85; swayAmp = 28.0;
 				break;
 		}
+		// «سوبارو · غرور»: جهنم کامل، ذره‌های درخشان‌تر و بیشتر + شعله‌های کف صفحه
+		bool inferno = ch.Id == "reif";
+		if (inferno)
+		{
+			count = 22; sizeMin = 4.0; sizeMax = 10.0; durMin = 5.0; durMax = 12.0; peak = 0.9; swayAmp = 26.0;
+		}
 		if (light)
 		{
 			peak = peak * 0.8;
@@ -235,7 +241,7 @@ public sealed class ThemeParticleLayer : Canvas
 				Ellipse dot = new Ellipse();
 				dot.Width = size;
 				dot.Height = size;
-				dot.Fill = (i % 4 == 0) ? b2 : b1;
+				dot.Fill = inferno ? EmberGlow(pal, i % 5 == 0) : ((i % 4 == 0) ? b2 : b1);
 				el = dot;
 			}
 			else
@@ -335,6 +341,16 @@ public sealed class ThemeParticleLayer : Canvas
 				flap.RepeatBehavior = RepeatBehavior.Forever;
 				p.Scale.BeginAnimation(ScaleTransform.ScaleXProperty, flap);
 			}
+			else if (inferno)
+			{
+				// سوسو زدن جرقه‌ها
+				double flicker = Rand(0.35, 0.9);
+				DoubleAnimation fx = Anim(0.4, 1.25, flicker);
+				fx.AutoReverse = true;
+				fx.RepeatBehavior = RepeatBehavior.Forever;
+				p.Scale.BeginAnimation(ScaleTransform.ScaleXProperty, fx);
+				p.Scale.BeginAnimation(ScaleTransform.ScaleYProperty, fx);
+			}
 			else if (kind == "sparkles")
 			{
 				// چشمک‌زدن
@@ -349,6 +365,67 @@ public sealed class ThemeParticleLayer : Canvas
 				p.Scale.BeginAnimation(ScaleTransform.ScaleYProperty, twY);
 			}
 		}
+		if (inferno)
+		{
+			AddInferno(pal, light, w, h);
+		}
+	}
+
+	// ذره‌ی درخشان: مرکز داغ، لبه‌ی محو
+	private static Brush EmberGlow(ThemePalette pal, bool hot)
+	{
+		Color core, mid, edge;
+		ThemeManager.TryParseColor(hot ? "#FFF1C2" : pal.Aura2, out core);
+		ThemeManager.TryParseColor(pal.Accent, out mid);
+		edge = Color.FromArgb(0, mid.R, mid.G, mid.B);
+		RadialGradientBrush g = new RadialGradientBrush();
+		g.GradientStops.Add(new GradientStop(core, 0.0));
+		g.GradientStops.Add(new GradientStop(mid, 0.45));
+		g.GradientStops.Add(new GradientStop(edge, 1.0));
+		g.Freeze();
+		return g;
+	}
+
+	// شعله‌های کف صفحه + هاله‌ی گرمای پایین پنجره
+	private void AddInferno(ThemePalette pal, bool light, double w, double h)
+	{
+		Color accent, deep, hotc;
+		ThemeManager.TryParseColor(pal.Accent, out accent);
+		ThemeManager.TryParseColor(pal.AccentDark, out deep);
+		ThemeManager.TryParseColor(pal.Aura2, out hotc);
+		double k = light ? 0.55 : 1.0;
+
+		// هاله‌ی گرما: از شفاف تا نارنجیِ کم‌رنگ، آرام می‌تپه
+		Rectangle glow = new Rectangle();
+		glow.Width = w;
+		glow.Height = Math.Max(120.0, h * 0.34);
+		LinearGradientBrush gb = new LinearGradientBrush();
+		gb.StartPoint = new Point(0.5, 0.0);
+		gb.EndPoint = new Point(0.5, 1.0);
+		gb.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), 0.0));
+		gb.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(70 * k), accent.R, accent.G, accent.B), 0.65));
+		gb.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(130 * k), hotc.R, hotc.G, hotc.B), 1.0));
+		gb.Freeze();
+		glow.Fill = gb;
+		glow.IsHitTestVisible = false;
+		if (!PerfHint.LowEnd)
+		{
+			// هاله یک بار به شکل تصویر ذخیره می‌شه و فقط شفافیتش تغییر می‌کنه (خیلی سبک‌تر از رندر دوباره‌ی گرادیان)
+			glow.CacheMode = new BitmapCache();
+		}
+		SetLeft(glow, 0.0);
+		SetTop(glow, h - glow.Height);
+		Children.Add(glow);
+		DoubleAnimation pulse = Anim(0.55, 1.0, 3.2);
+		Timeline.SetDesiredFrameRate(pulse, 15);
+		pulse.AutoReverse = true;
+		pulse.RepeatBehavior = RepeatBehavior.Forever;
+		pulse.EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut };
+		glow.BeginAnimation(UIElement.OpacityProperty, pulse);
+		Particle gp = new Particle();
+		gp.Element = glow;
+		particles.Add(gp);
+
 	}
 }
 }

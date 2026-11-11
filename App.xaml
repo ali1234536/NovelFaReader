@@ -28,6 +28,7 @@
             <Visibility x:Key="ThemeArtVisibility">Collapsed</Visibility>
             <Visibility x:Key="ThemeStitchVisibility">Collapsed</Visibility>
             <Visibility x:Key="ThemeBiteVisibility">Collapsed</Visibility>
+            <Visibility x:Key="ThemeLavaVisibility">Collapsed</Visibility>
             <SolidColorBrush x:Key="ThemeAuraA" Color="#00000000" />
             <SolidColorBrush x:Key="ThemeAuraB" Color="#00000000" />
             <PathGeometry x:Key="IcoMinimize" Figures="M3,8 H13" />
@@ -333,11 +334,6 @@
                 <Style.Triggers>
                     <Trigger Property="UIElement.IsMouseOver" Value="True">
                         <Setter Property="BorderBrush" Value="{DynamicResource AccentColor}" />
-                        <Setter Property="UIElement.Effect">
-                            <Setter.Value>
-                                <DropShadowEffect Color="{DynamicResource AccentGlow}" BlurRadius="22" ShadowDepth="0" Opacity="0.45" RenderingBias="Performance" />
-                            </Setter.Value>
-                        </Setter>
                     </Trigger>
                 </Style.Triggers>
             </Style>

@@ -294,6 +294,8 @@ namespace EpubReader.Services
                 r["ThemeStitchVisibility"] = (ch.Id == "tsugi") ? Visibility.Visible : Visibility.Collapsed;
                 // جلد گاز‌خورده‌ی کتاب‌های تمام‌شده هم فقط برای همین تم
                 r["ThemeBiteVisibility"] = (ch.Id == "tsugi") ? Visibility.Visible : Visibility.Collapsed;
+                // ترک‌های گدازه و گوشه‌ی سوخته‌ی جلد کتاب‌های تمام‌شده: فقط «سوبارو · غرور»
+                r["ThemeLavaVisibility"] = (ch.Id == "reif") ? Visibility.Visible : Visibility.Collapsed;
                 r["ThemeAuraA"] = AuraBrush(Col(pa.Aura1), 0.0, 0.0, light ? 0.22 : 0.30);
                 r["ThemeAuraB"] = AuraBrush(Col(pa.Aura2), 1.0, 1.0, light ? 0.18 : 0.24);
             }
@@ -303,6 +305,7 @@ namespace EpubReader.Services
                 r["ThemeArtVisibility"] = Visibility.Collapsed;
                 r["ThemeStitchVisibility"] = Visibility.Collapsed;
                 r["ThemeBiteVisibility"] = Visibility.Collapsed;
+                r["ThemeLavaVisibility"] = Visibility.Collapsed;
                 r["ThemeAuraA"] = Brushes.Transparent;
                 r["ThemeAuraB"] = Brushes.Transparent;
             }

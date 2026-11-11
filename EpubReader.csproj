@@ -131,6 +131,7 @@
       <DependentUpon>PinWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\AppSettings.cs" />
+    <Compile Include="Services\ReaderFind.cs" />
     <Compile Include="Services\CharacterThemes.cs" />
     <Compile Include="Services\Loc.cs" />
     <Compile Include="Services\LocStrings.cs" />

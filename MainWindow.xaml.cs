@@ -431,13 +431,27 @@ namespace EpubReader
             PdfViewerHost.CloseComic();
             if (currentBook != null && !string.IsNullOrEmpty(currentBook.ExtractPath))
             {
-                try
+                // پاک کردن پوشه‌ی موقت (مخصوصاً کمیک‌ها که هزاران عکس دارن) نباید برنامه رو هنگ کنه: توی پس‌زمینه و با چند بار تلاش
+                string toDelete = currentBook.ExtractPath;
+                Task.Run(() =>
                 {
-                    Directory.Delete(currentBook.ExtractPath, recursive: true);
-                }
-                catch
-                {
-                }
+                    for (int attempt = 0; attempt < 5; attempt++)
+                    {
+                        try
+                        {
+                            if (!Directory.Exists(toDelete))
+                            {
+                                return;
+                            }
+                            Directory.Delete(toDelete, recursive: true);
+                            return;
+                        }
+                        catch
+                        {
+                            System.Threading.Thread.Sleep(600);
+                        }
+                    }
+                });
             }
         }
 
@@ -1223,6 +1237,8 @@ namespace EpubReader
             sb.Append("<style id=\"readerSpacing\">").Append(BuildSpacingCss()).Append("</style>");
             sb.Append("<style id=\"rdrCursor\">").Append(MouseFx.ReaderFxCss).Append("</style>");
             sb.Append("<script>window.__rdrGen=").Append(docGen).Append(";window.__rdrKeys=").Append(BuildShortcutKeyMapJs()).Append(";</script>");
+            sb.Append("<script>window.__fndL={ph:'").Append(CssQuote(Loc.T("جستجو در کتاب…"))).Append("',none:'").Append(CssQuote(Loc.T("پیدا نشد"))).Append("',book:'").Append(CssQuote(Loc.T("کل کتاب:"))).Append("'};</script>");
+            sb.Append("<script>").Append(ReaderFind.PageScript).Append("</script>");
             sb.Append("<script>(function(){");
             sb.Append("function post(m){try{window.chrome.webview.postMessage(m);}catch(x){}}");
             sb.Append("document.addEventListener('keydown',function(e){var k=e.keyCode;");
@@ -2508,6 +2524,11 @@ namespace EpubReader
                 ToggleFullScreen();
                 e.Handled = true;
             }
+            else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control && !(Keyboard.FocusedElement is TextBox))
+            {
+                OpenBookSearch();
+                e.Handled = true;
+            }
             else
             {
                 string id = ShortcutService.Resolve(e, "rd.");
@@ -2523,6 +2544,24 @@ namespace EpubReader
                     RunReaderAction(id);
                 }
             }
+        }
+
+        // Ctrl+F وقتی فوکوس بیرون از صفحه‌ی کتاب باشه (مثلاً روی فهرست بخش‌ها)
+        private void OpenBookSearch()
+        {
+            try
+            {
+                webBrowser1.Focus();
+                RunScriptAsync("if(window.__fndOpen){window.__fndOpen();}else if(window.__pdfSearch){window.__pdfSearch();}");
+            }
+            catch
+            {
+            }
+        }
+
+        private void btnBookSearch_Click(object sender, RoutedEventArgs e)
+        {
+            OpenBookSearch();
         }
 
         private void btnContinuousMode_Click(object sender, RoutedEventArgs e)
@@ -3039,6 +3078,10 @@ namespace EpubReader
             {
                 RunPendingRestore();
             }
+            if (pendingFindQ != null && pdfSource == null)
+            {
+                RunPendingFind();
+            }
             for (int i = stalePageFiles.Count - 1; i >= 0; i--)
             {
                 try
@@ -3122,6 +3165,115 @@ namespace EpubReader
             listBoxChapters.SelectedIndex = idx;
         }
 
+        // ----- جستجوی داخل کتاب (EPUB) -----
+        private int[] findHits;
+        private string findQuery;
+        private string pendingFindQ;
+        private int pendingFindDir = 1;
+        private readonly Dictionary<int, string> findTextCache = new Dictionary<int, string>();
+        private string findCacheBook;
+
+        private string FindChapterText(int i)
+        {
+            string text;
+            lock (findTextCache)
+            {
+                if (findTextCache.TryGetValue(i, out text)) { return text; }
+            }
+            try
+            {
+                string fp = currentBook.Chapters[i].FilePath;
+                string html = File.ReadAllText(fp, Encoding.UTF8);
+                text = ReaderFind.PlainNorm(html);
+            }
+            catch { text = ""; }
+            lock (findTextCache) { findTextCache[i] = text; }
+            return text;
+        }
+
+        private Task<int[]> ComputeFindHits(string q)
+        {
+            EpubBook book = currentBook;
+            string nq = ReaderFind.Norm(q);
+            return Task.Run(() =>
+            {
+                int n = (book != null) ? book.Chapters.Count : 0;
+                int[] hits = new int[n];
+                if (nq.Length == 0) { return hits; }
+                for (int i = 0; i < n; i++)
+                {
+                    hits[i] = ReaderFind.Count(FindChapterText(i), nq);
+                }
+                return hits;
+            });
+        }
+
+        private async void OnFindQuery(string q)
+        {
+            if (currentBook == null) { return; }
+            string key = (currentLibraryBook != null) ? currentLibraryBook.FilePath : currentBook.ExtractPath;
+            if (findCacheBook != key)
+            {
+                lock (findTextCache) { findTextCache.Clear(); }
+                findCacheBook = key;
+            }
+            findQuery = q;
+            int[] hits = await ComputeFindHits(q);
+            if (findQuery != q) { return; }
+            findHits = hits;
+            int total = 0;
+            foreach (int h in hits) { total += h; }
+            await RunScriptAsync("window.__fndBook&&window.__fndBook(" + total + ");");
+        }
+
+        // رسیدن به آخر/اول نتیجه‌های صفحه: برو سراغ فصل بعدی/قبلی که نتیجه داره
+        private async void OnFindNext(int dir, string q)
+        {
+            if (currentBook == null) { return; }
+            if (findHits == null || findQuery != q)
+            {
+                findQuery = q;
+                findHits = await ComputeFindHits(q);
+            }
+            int[] hits = findHits;
+            int n = hits.Length;
+            int target = -1;
+            if (dir >= 0)
+            {
+                for (int i = contLast + 1; i < n; i++) { if (hits[i] > 0) { target = i; break; } }
+                if (target < 0) { for (int i = 0; i < contFirst && i < n; i++) { if (hits[i] > 0) { target = i; break; } } }
+            }
+            else
+            {
+                for (int i = Math.Min(contFirst - 1, n - 1); i >= 0; i--) { if (hits[i] > 0) { target = i; break; } }
+                if (target < 0) { for (int i = n - 1; i > contLast; i--) { if (hits[i] > 0) { target = i; break; } } }
+            }
+            if (target < 0) { return; }
+            pendingFindQ = q;
+            pendingFindDir = dir;
+            if (listBoxChapters.SelectedIndex == target)
+            {
+                listBoxChapters.SelectedIndex = -1;
+            }
+            listBoxChapters.SelectedIndex = target;
+        }
+
+        private async void RunPendingFind()
+        {
+            string q = pendingFindQ;
+            int dir = pendingFindDir;
+            pendingFindQ = null;
+            if (q == null) { return; }
+            await Task.Delay(180);
+            await RunScriptAsync("window.__fndReopen&&window.__fndReopen('" + CssQuote(q) + "'," + dir + ");");
+            if (findHits != null)
+            {
+                int total = 0;
+                foreach (int h in findHits) { total += h; }
+                await RunScriptAsync("window.__fndBook&&window.__fndBook(" + total + ");");
+            }
+        }
+
         private async void RunPendingAnchor()
         {
             int idx = pendingAnchorIdx;
@@ -3181,6 +3333,22 @@ namespace EpubReader
                     {
                         AppSettings.Set("PdfLook." + currentLibraryBook.Id, p[1] == "1" ? "1" : "0");
                     }
+                    break;
+                case "fq":
+                    if (p.Length == 2 && pdfSource == null)
+                    {
+                        OnFindQuery(Uri.UnescapeDataString(p[1]));
+                    }
+                    break;
+                case "fn":
+                    if (p.Length == 3 && pdfSource == null && int.TryParse(p[1], out a))
+                    {
+                        OnFindNext(a, Uri.UnescapeDataString(p[2]));
+                    }
+                    break;
+                case "fx":
+                    findHits = null;
+                    findQuery = null;
                     break;
                 case "lk":
                     if (p.Length == 2)

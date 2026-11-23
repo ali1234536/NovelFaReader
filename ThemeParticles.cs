@@ -196,6 +196,12 @@ public sealed class ThemeParticleLayer : Canvas
 			case "sparkles":
 				count = 10; sizeMin = 7.0; sizeMax = 15.0; durMin = 11.0; durMax = 22.0; peak = 0.8; rising = true; swayAmp = 14.0;
 				break;
+			case "coins":
+				count = 12; sizeMin = 9.0; sizeMax = 16.0; durMin = 9.0; durMax = 18.0; peak = 0.8; swayAmp = 30.0;
+				break;
+			case "orbs":
+				count = 12; sizeMin = 7.0; sizeMax = 14.0; durMin = 12.0; durMax = 24.0; peak = 0.8; rising = true; swayAmp = 20.0;
+				break;
 			case "butterflies":
 				count = 5; sizeMin = 17.0; sizeMax = 27.0; durMin = 16.0; durMax = 28.0; peak = 0.75; rising = true; swayAmp = 60.0;
 				break;
@@ -252,6 +258,8 @@ public sealed class ThemeParticleLayer : Canvas
 				else if (kind == "snow") { glyph = "snow"; }
 				else if (kind == "leaves") { glyph = "leaf"; }
 				else if (kind == "ash") { glyph = "shard"; }
+				else if (kind == "coins") { glyph = "coin"; }
+				else if (kind == "orbs") { glyph = "orb"; }
 				if (kind == "butterflies")
 				{
 					data = ch.Emblem;
@@ -351,7 +359,15 @@ public sealed class ThemeParticleLayer : Canvas
 				p.Scale.BeginAnimation(ScaleTransform.ScaleXProperty, fx);
 				p.Scale.BeginAnimation(ScaleTransform.ScaleYProperty, fx);
 			}
-			else if (kind == "sparkles")
+			else if (kind == "coins")
+			{
+				// چرخیدنِ سکه دور محور خودش
+				DoubleAnimation flip = Anim(1.0, 0.12, Rand(0.7, 1.4));
+				flip.AutoReverse = true;
+				flip.RepeatBehavior = RepeatBehavior.Forever;
+				p.Scale.BeginAnimation(ScaleTransform.ScaleXProperty, flip);
+			}
+			else if (kind == "sparkles" || kind == "orbs")
 			{
 				// چشمک‌زدن
 				double twinkleSeconds = Rand(1.0, 2.2);

@@ -46,7 +46,7 @@ public static class NativeBooks
 		{
 			try
 			{
-				using (ZipArchive zip = ZipFile.OpenRead(path))
+				using (ZipArchive zip = ZipFile.OpenRead(NestedZip.Resolve(path)))
 				{
 					List<string> names = new List<string>();
 					foreach (ZipArchiveEntry e in zip.Entries)
@@ -206,7 +206,7 @@ public static class NativeBooks
 		List<string> files = new List<string>();
 		try
 		{
-			using (ZipArchive zip = ZipFile.OpenRead(path))
+			using (ZipArchive zip = ZipFile.OpenRead(NestedZip.Resolve(path)))
 			{
 				Dictionary<string, ZipArchiveEntry> byName = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
 				foreach (ZipArchiveEntry e in zip.Entries)

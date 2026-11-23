@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows.Input;
 
 namespace EpubReader.Services
@@ -10,6 +11,8 @@ namespace EpubReader.Services
     {
         private static readonly Dictionary<string, string> values = new Dictionary<string, string>();
         private static bool loaded = false;
+        private static bool dirty = false;
+        private static Timer saveTimer;
 
         private static string FilePath
         {
@@ -24,33 +27,107 @@ namespace EpubReader.Services
             }
         }
 
-        public static void Load()
+        // همه‌ی دسترسی‌ها (از رشته‌ی رابط و رشته‌های پس‌زمینه‌ی ایمپورت/هش/XP) زیر یک قفلن
+        private static readonly object gate = new object();
+
+        private static void ReadInto(string path)
         {
-            if (loaded) return;
-            loaded = true;
-            try
+            foreach (string line in File.ReadAllLines(path, Encoding.UTF8))
             {
-                if (!File.Exists(FilePath)) return;
-                foreach (string line in File.ReadAllLines(FilePath, Encoding.UTF8))
-                {
-                    int i = line.IndexOf('=');
-                    if (i <= 0) continue;
-                    values[line.Substring(0, i).Trim()] = line.Substring(i + 1).Trim();
-                }
+                int i = line.IndexOf('=');
+                if (i <= 0) continue;
+                values[line.Substring(0, i).Trim()] = line.Substring(i + 1).Trim();
             }
-            catch { }
         }
 
+        public static void Load()
+        {
+            lock (gate)
+            {
+                if (loaded) return;
+                try
+                {
+                    string main = FilePath;
+                    string bak = main + ".bak";
+                    bool ok = false;
+                    if (File.Exists(main))
+                    {
+                        try
+                        {
+                            ReadInto(main);
+                            ok = values.Count > 0;
+                        }
+                        catch { values.Clear(); }
+                    }
+                    // فایل اصلی خراب/خالی/نیمه‌کاره بود: از نسخه‌ی قبلی (.bak) بخون
+                    if (!ok && File.Exists(bak))
+                    {
+                        try { ReadInto(bak); } catch { }
+                    }
+                }
+                catch { }
+                loaded = true;
+            }
+        }
+
+        // زمان‌بندی ذخیره‌ی غیرمسدودکننده تا تغییرات پشت‌سرهم اسلایدرها و تنظیمات باعث لگ نشوند
+        private static void ScheduleSave()
+        {
+            lock (gate)
+            {
+                dirty = true;
+                if (saveTimer == null)
+                {
+                    saveTimer = new Timer(_ => Flush(), null, 350, Timeout.Infinite);
+                }
+                else
+                {
+                    saveTimer.Change(350, Timeout.Infinite);
+                }
+            }
+        }
+
+        public static void Flush()
+        {
+            lock (gate)
+            {
+                if (!dirty) return;
+                dirty = false;
+                SaveInternal();
+            }
+        }
+
+        // نوشتن اتمیک: اول فایل موقت، بعد جایگزینی (نسخه‌ی قبلی می‌شه .bak). وسط نوشتن قطع بشه هم فایل سالم می‌مونه
         public static void Save()
+        {
+            lock (gate)
+            {
+                dirty = false;
+                SaveInternal();
+            }
+        }
+
+        private static void SaveInternal()
         {
             try
             {
-                List<string> lines = new List<string>();
+                if (!loaded) return;
+                StringBuilder sb = new StringBuilder(values.Count * 32);
                 foreach (KeyValuePair<string, string> kv in values)
                 {
-                    lines.Add(kv.Key + "=" + kv.Value);
+                    sb.Append(kv.Key).Append('=').Append(kv.Value).Append("\r\n");
                 }
-                File.WriteAllLines(FilePath, lines.ToArray(), Encoding.UTF8);
+                string main = FilePath;
+                string tmp = main + ".tmp";
+                File.WriteAllText(tmp, sb.ToString(), new UTF8Encoding(false));
+                if (File.Exists(main))
+                {
+                    File.Replace(tmp, main, main + ".bak", true);
+                }
+                else
+                {
+                    File.Move(tmp, main);
+                }
             }
             catch { }
         }
@@ -58,15 +135,26 @@ namespace EpubReader.Services
         public static string Get(string key, string defaultValue)
         {
             Load();
-            string v;
-            return values.TryGetValue(key, out v) ? v : defaultValue;
+            lock (gate)
+            {
+                string v;
+                return values.TryGetValue(key, out v) ? v : defaultValue;
+            }
         }
 
         public static void Set(string key, string value)
         {
             Load();
-            values[key] = value;
-            Save();
+            lock (gate)
+            {
+                string existing;
+                if (values.TryGetValue(key, out existing) && existing == value)
+                {
+                    return;
+                }
+                values[key] = value;
+            }
+            ScheduleSave();
         }
 
         // "dark" یا "light"
@@ -119,6 +207,8 @@ namespace EpubReader.Services
             new ShortcutAction("lib.tabCompleted", GroupLibrary, "بخش تمام‌شده"),
             new ShortcutAction("lib.tabRecent", GroupLibrary, "بخش اخیراً بازشده"),
             new ShortcutAction("lib.tabPrivate", GroupLibrary, "بخش خصوصی"),
+            new ShortcutAction("lib.tabAdvanced", GroupLibrary, "بخش پیشرفته و هوشمند"),
+            new ShortcutAction("lib.switchUi", GroupLibrary, "تغییر حالت رابط کاربری"),
             new ShortcutAction("lib.changePin", GroupLibrary, "تغییر رمز"),
             new ShortcutAction("lib.theme", GroupLibrary, "تغییر حالت روشن/تیره"),
             new ShortcutAction("lib.language", GroupLibrary, "تغییر زبان (فارسی / English)"),
@@ -128,6 +218,10 @@ namespace EpubReader.Services
 
             new ShortcutAction("rd.next", GroupReader, "بخش بعدی"),
             new ShortcutAction("rd.prev", GroupReader, "بخش قبلی"),
+            new ShortcutAction("rd.autoScroll", GroupReader, "اسکرول خودکار (شروع / توقف)"),
+            new ShortcutAction("rd.focusMode", GroupReader, "حالت تمرکز (ذن)"),
+            new ShortcutAction("rd.smartHud", GroupReader, "نوار هوشمند مطالعه"),
+            new ShortcutAction("rd.readingRuler", GroupReader, "خط‌کش تمرکز"),
             new ShortcutAction("rd.fontUp", GroupReader, "بزرگ‌تر کردن فونت"),
             new ShortcutAction("rd.fontDown", GroupReader, "کوچک‌تر کردن فونت"),
             new ShortcutAction("rd.addFont", GroupReader, "افزودن فونت شخصی"),
@@ -167,6 +261,7 @@ namespace EpubReader.Services
             {
                 AppSettings.Set("Shortcut." + a.Id, "");
             }
+            AppSettings.Flush();
         }
 
         // اگر این کلید برای کار دیگری تنظیم شده باشد همان کار را برمی‌گرداند

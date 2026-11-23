@@ -50,12 +50,20 @@ namespace EpubReader
             RegisterFileAssociation();
 
             AppSettings.Load();
+            XpStore.SelfHeal();
             Loc.Init();
             MouseFx.Init();
             ThemeManager.Apply(AppSettings.Theme);
+            SmartPerformanceController.Initialize();
             CustomFontService.Initialize();
             try { RecommendedFontService.Initialize(); } catch { }
             base.OnStartup(e);
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            try { AppSettings.Flush(); } catch { }
+            base.OnExit(e);
         }
 
         // ---------- تک‌نمونه‌ای (Single Instance) ----------

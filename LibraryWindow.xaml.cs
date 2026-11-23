@@ -70,6 +70,7 @@ namespace EpubReader
             WindowMax.Attach(this, () => isFullScreen);
             LibraryService.CleanupUnusedCovers();
             RefreshGreeting();
+            InitSmartLibrary();
             // اگه برنامه از یه بازه‌ی زمانی به بعدی برسه (مثلاً از عصر به شب)، متن خودش عوض بشه
             System.Windows.Threading.DispatcherTimer greetingTimer = new System.Windows.Threading.DispatcherTimer();
             greetingTimer.Interval = TimeSpan.FromMinutes(1);
@@ -308,6 +309,71 @@ namespace EpubReader
             }
         }
 
+        // کلید محتوایی (هش فایل) کتاب‌های غیرخصوصیِ موجود روی این دستگاه؛ لنگر ضد تقلبِ بازیابی بکاپ
+        private async Task<HashSet<string>> LibraryContentKeysAsync()
+        {
+            List<Book> snapshot = new List<Book>(LibraryService.LoadBooks());
+            return await Task.Run(() =>
+            {
+                HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+                foreach (Book b in snapshot)
+                {
+                    if (b.IsPrivate || string.IsNullOrEmpty(b.FilePath) || !File.Exists(b.FilePath))
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        keys.Add(XpLedger.ContentKeyFor(ReadingRecordStore.Sha256OfFile(b.FilePath)));
+                    }
+                    catch
+                    {
+                    }
+                }
+                return keys;
+            });
+        }
+
+        private int claimSig = -1;
+        private bool claimRunning;
+
+        // ورودی‌های XPِ معلقِ بکاپ: هر وقت مجموعه‌ی کتاب‌ها عوض شد (و فقط اگه چیزی معلقه) کتاب‌های تازه حساب می‌شن
+        private async void ClaimPendingXpAsync()
+        {
+            if (claimRunning || books == null || !XpStore.HasPending)
+            {
+                return;
+            }
+            int sig = books.Count;
+            foreach (Book b in books)
+            {
+                sig = sig * 31 + (b.Id ?? "").GetHashCode();
+            }
+            if (sig == claimSig)
+            {
+                return;
+            }
+            claimRunning = true;
+            try
+            {
+                HashSet<string> keys = await LibraryContentKeysAsync();
+                claimSig = sig;
+                int gained = XpStore.ClaimPending(keys);
+                if (gained > 0)
+                {
+                    XpLevel lv = XpRank.LevelFor(XpStore.TotalXp);
+                    txtRank.Text = lv.Icon + " " + lv.DisplayName;
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                claimRunning = false;
+            }
+        }
+
         private void UpdateProfileStats()
         {
             if (books == null) return;
@@ -322,9 +388,10 @@ namespace EpubReader
             // رتبه‌ی نمایشی از XP (بعد از مهاجرت یک‌باره از رتبه‌ی قدیمی)؛ ستاره‌ها با پیشرفت داخل عنوان بالا می‌رن
             XpStore.MigrateIfNeeded(books, rankDone);
             RekeyXpLedgerAsync();
+            ClaimPendingXpAsync();
             XpLevel xpLevel = XpRank.LevelFor(XpStore.TotalXp);
-            txtRank.Text = xpLevel.DisplayName;
-            txtRank.ToolTip = Loc.F("{0} XP", XpStore.TotalXp) + (xpLevel.XpToNext > 0 ? " · " + Loc.F("{0} XP تا مرحله‌ی بعد", xpLevel.XpToNext) : "");
+            txtRank.Text = xpLevel.Icon + " " + xpLevel.DisplayName;
+            txtRank.ToolTip = Loc.F("{0} XP", XpStore.TotalXp) + (xpLevel.XpToNext > 0 ? " · " + Loc.F("{0} از {1} XP تا مرحله‌ی بعد", xpLevel.XpIntoStep, xpLevel.XpStepTotal) : "");
             CheckXpCelebration(xpLevel);
             txtThemeCount.Text = RankService.UnlockedCount() + "/" + CharacterThemes.VisibleCount();
 
@@ -811,6 +878,7 @@ namespace EpubReader
                 QuadraticEase ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
 
                 TranslateTransform move = new TranslateTransform(0.0, 18.0);
+                if (!SmartSettings.CardAnimations) { card.Opacity = 1.0; return; }
                 card.RenderTransform = move;
                 move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(18.0, 0.0, duration) { BeginTime = delay, EasingFunction = ease });
 
@@ -838,9 +906,19 @@ namespace EpubReader
             }
             if (collectionsPanel != null && booksScroll != null)
             {
+                bool advancedTab = currentTab == "advanced";
                 bool collectionsTab = currentTab == "collections";
+                if (advancedPanel != null)
+                {
+                    advancedPanel.Visibility = advancedTab ? Visibility.Visible : Visibility.Collapsed;
+                }
                 collectionsPanel.Visibility = collectionsTab ? Visibility.Visible : Visibility.Collapsed;
-                booksScroll.Visibility = collectionsTab ? Visibility.Collapsed : Visibility.Visible;
+                booksScroll.Visibility = (collectionsTab || advancedTab) ? Visibility.Collapsed : Visibility.Visible;
+                if (advancedTab)
+                {
+                    RefreshSmartDashboard();
+                    return;
+                }
                 if (statusBarBooks != null)
                 {
                     bool statusTab = currentTab == "status";
@@ -1029,6 +1107,7 @@ namespace EpubReader
             SetTabAppearance(btnTabRecent, "recent", selectedBrush, normalBrush, selectedText, normalText);
             SetTabAppearance(btnTabCollections, "collections", selectedBrush, normalBrush, selectedText, normalText);
             SetTabAppearance(btnTabPrivate, "private", selectedBrush, normalBrush, selectedText, normalText);
+            if (btnTabAdvanced != null) SetTabAppearance(btnTabAdvanced, "advanced", selectedBrush, normalBrush, selectedText, normalText);
         }
 
         private void SetTabAppearance(Button button, string tabKey, Brush selectedBg, Brush normalBg, Brush selectedFg, Brush normalFg)
@@ -1263,7 +1342,8 @@ namespace EpubReader
                 Mouse.OverrideCursor = Cursors.Wait;
                 try
                 {
-                    result = BackupService.Apply(data, LibraryFinishedCount());
+                    HashSet<string> keys = await LibraryContentKeysAsync();
+                    result = BackupService.Apply(data, LibraryFinishedCount(), keys);
                 }
                 finally
                 {
@@ -1562,6 +1642,12 @@ namespace EpubReader
         private static readonly string[][] secretThemeCodes = new string[][]
         {
             new string[] { "BEAKO", "beatrice" },
+            new string[] { "OTTO", "otto" },
+            new string[] { "VICE", "gta" },
+            new string[] { "GTA", "gta" },
+            new string[] { "JULIUS", "julius" },
+            new string[] { "JUKULIUS", "julius" },
+            new string[] { "JUUKULIUS", "julius" },
             new string[] { "EMT", "emilia" },
             new string[] { "TEA", "echidna" },
             new string[] { "TSUGI", "tsugi" },
@@ -1753,6 +1839,12 @@ namespace EpubReader
                 case "lib.tabPrivate":
                     TabButton_Click(btnTabPrivate, args);
                     break;
+                case "lib.tabAdvanced":
+                    TabButton_Click(btnTabAdvanced, args);
+                    break;
+                case "lib.switchUi":
+                    CycleLibraryUiMode();
+                    break;
                 case "lib.changePin":
                     btnChangePin_Click(btnChangePin, args);
                     break;
@@ -1930,7 +2022,7 @@ namespace EpubReader
 
         private void txtSearch_TextChanged(object sender, TextChangedEventArgs e)
         {
-            ApplyFilter();
+            DebouncedSearchChanged();
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -2762,11 +2854,19 @@ namespace EpubReader
 
                 LibraryService.MarkAsOpened(selectedBook.FilePath);
                 selectedBook.LastOpenedDate = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                MainWindow readerWindow = prewarmedReader ?? new MainWindow();
+                MainWindow readerWindow = prewarmedReader;
                 prewarmedReader = null;
+                if (readerWindow == null || readerWindow.IsClosedWindow)
+                {
+                    if (readerWindow != null)
+                    {
+                        LibraryService.LogOpen("[Library] prewarmed reader was already closed; creating a new one");
+                    }
+                    readerWindow = new MainWindow();
+                }
                 if (!readerWindow.OpenBook(selectedBook, preloaded))
                 {
-                    readerWindow.Close();
+                    try { readerWindow.Close(); } catch { }
                     return;
                 }
                 readerWindow.Closed += (object s, EventArgs args) =>
@@ -2776,7 +2876,29 @@ namespace EpubReader
                     Activate();
                     Dispatcher.BeginInvoke(new Action(PrewarmReaderWindow), DispatcherPriority.ApplicationIdle);
                 };
-                readerWindow.Show();
+                try
+                {
+                    readerWindow.Show();
+                }
+                catch (InvalidOperationException)
+                {
+                    // پنجره وسط کار بسته شده بود؛ یه پنجره‌ی تازه می‌سازیم و دوباره امتحان می‌کنیم
+                    LibraryService.LogOpen("[Library] reader window closed before Show; retrying with a new window");
+                    readerWindow = new MainWindow();
+                    if (!readerWindow.OpenBook(selectedBook, preloaded))
+                    {
+                        try { readerWindow.Close(); } catch { }
+                        return;
+                    }
+                    readerWindow.Closed += (object s, EventArgs args) =>
+                    {
+                        LoadLibrary();
+                        Show();
+                        Activate();
+                        Dispatcher.BeginInvoke(new Action(PrewarmReaderWindow), DispatcherPriority.ApplicationIdle);
+                    };
+                    readerWindow.Show();
+                }
                 Hide();
             }
             catch (Exception ex)

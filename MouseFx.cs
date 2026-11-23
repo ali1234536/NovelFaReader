@@ -475,6 +475,8 @@ public sealed class MouseTrailAdorner : Adorner
 			case "snow": shape = CharacterThemes.Glyph("snow"); shapeBox = 20.0; break;
 			case "leaves": shape = CharacterThemes.Glyph("leaf"); shapeBox = 20.0; break;
 			case "ash": shape = CharacterThemes.Glyph("shard"); shapeBox = 20.0; break;
+			case "coins": shape = CharacterThemes.Glyph("coin"); shapeBox = 20.0; break;
+			case "orbs": shape = CharacterThemes.Glyph("orb"); shapeBox = 20.0; break;
 			case "butterflies": shape = ch.Emblem; shapeBox = 100.0; break;
 			case "embers": shape = null; shapeBox = 20.0; break;
 			default: shape = CharacterThemes.Glyph("spark"); shapeBox = 20.0; break;
@@ -533,7 +535,7 @@ public sealed class MouseTrailAdorner : Adorner
 
 	private void Emit(Point pos, double now)
 	{
-		bool rising = kind.StartsWith("embers") || kind.StartsWith("sparkles") || kind.StartsWith("butterflies");
+		bool rising = kind.StartsWith("embers") || kind.StartsWith("sparkles") || kind.StartsWith("orbs") || kind.StartsWith("butterflies");
 		Dot d = new Dot();
 		d.X = pos.X + Rand(-4.0, 4.0);
 		d.Y = pos.Y + Rand(-4.0, 4.0);

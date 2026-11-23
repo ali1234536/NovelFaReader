@@ -106,7 +106,70 @@ namespace EpubReader.Services
         // ترجمه‌ی یک قالب که جاهای {0} و {1} داره، بعد پر کردنش
         public static string F(string fa, params object[] args)
         {
-            return string.Format(T(fa), args);
+            return Digits(string.Format(T(fa), args));
+        }
+
+        // رقم‌ها رو با زبان برنامه هماهنگ می‌کنه: فارسی ۰-۹ و انگلیسی 0-9
+        // (رقم‌های چسبیده به حرف لاتین مثل EPUB3 و مسیر فایل/آدرس دست نمی‌خورن)
+        private static bool IsWordCh(char c)
+        {
+            return (c >= '0' && c <= '9') || c == '_' || c == '.' || (c < '\u0600' && char.IsLetter(c));
+        }
+
+        public static string Digits(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.IndexOf(":\\", StringComparison.Ordinal) >= 0 || s.IndexOf("://", StringComparison.Ordinal) >= 0)
+            {
+                return s;
+            }
+            bool en = IsEnglish;
+            StringBuilder sb = null;
+            for (int i = 0; i < s.Length; i++)
+            {
+                char ch = s[i];
+                char to = ch;
+                if (ch >= '\u06F0' && ch <= '\u06F9')
+                {
+                    if (en) { to = (char)('0' + (ch - '\u06F0')); }
+                }
+                else if (ch >= '\u0660' && ch <= '\u0669')
+                {
+                    to = en ? (char)('0' + (ch - '\u0660')) : (char)('\u06F0' + (ch - '\u0660'));
+                }
+                else if (!en && ch >= '0' && ch <= '9')
+                {
+                    // کل «کلمه» (حرف/رقم/نقطه) بررسی می‌شه؛ اگه حرف لاتین داشت (v1.3.4 ، EPUB3) دست نمی‌خوره
+                    int st = i;
+                    while (st > 0 && IsWordCh(s[st - 1])) { st--; }
+                    int j = i;
+                    while (j < s.Length && IsWordCh(s[j])) { j++; }
+                    bool latin = false;
+                    for (int k = st; k < j; k++)
+                    {
+                        if (s[k] == '_' || (s[k] < '\u0600' && char.IsLetter(s[k]))) { latin = true; break; }
+                    }
+                    if (!latin)
+                    {
+                        if (sb == null) { sb = new StringBuilder(s); }
+                        for (int k = i; k < j; k++)
+                        {
+                            if (s[k] >= '0' && s[k] <= '9') { sb[k] = (char)('\u06F0' + (s[k] - '0')); }
+                        }
+                    }
+                    i = j - 1;
+                    continue;
+                }
+                else if (en && (ch == '\u066B' || ch == '\u066C' || ch == '\u066A'))
+                {
+                    to = ch == '\u066B' ? '.' : ch == '\u066C' ? ',' : '%';
+                }
+                if (to != ch)
+                {
+                    if (sb == null) { sb = new StringBuilder(s); }
+                    sb[i] = to;
+                }
+            }
+            return sb == null ? s : sb.ToString();
         }
 
         // مثل F ولی برای شمارش (انگلیسی مفرد/جمع داره). توی ترجمه‌ی انگلیسی "مفرد|جمع" نوشته می‌شه
@@ -121,7 +184,7 @@ namespace EpubReader.Services
                     s = (n == 1) ? s.Substring(0, bar) : s.Substring(bar + 1);
                 }
             }
-            return string.Format(s, args);
+            return Digits(string.Format(s, args));
         }
 
         // نقل‌قول: «متن» در فارسی و “text” در انگلیسی
@@ -221,13 +284,20 @@ namespace EpubReader.Services
 
         private static void OnAnyLoaded(object sender, RoutedEventArgs e)
         {
-            if (!IsEnglish)
-            {
-                return;
-            }
             DependencyObject d = sender as DependencyObject;
             if (d == null)
             {
+                return;
+            }
+            if (!IsEnglish)
+            {
+                try
+                {
+                    TranslateOne(d);
+                }
+                catch
+                {
+                }
                 return;
             }
             try
@@ -324,6 +394,7 @@ namespace EpubReader.Services
                         tb.Text = text;
                     }
                 }
+                HookDigits(tb);
             }
             else
             {
@@ -355,6 +426,22 @@ namespace EpubReader.Services
                 }
             }
 
+            ContentControl cdc = d as ContentControl;
+            if (cdc != null && !(d is Window))
+            {
+                string cs = cdc.Content as string;
+                if (cs != null)
+                {
+                    string cn = Digits(cs);
+                    if (cn != cs) { cdc.SetCurrentValue(ContentControl.ContentProperty, cn); }
+                }
+            }
+            if (window != null)
+            {
+                string wt = Digits(window.Title);
+                if (wt != window.Title) { window.Title = wt; }
+            }
+
             FrameworkElement fe = d as FrameworkElement;
             if (fe != null)
             {
@@ -367,6 +454,57 @@ namespace EpubReader.Services
                         fe.ToolTip = text;
                     }
                 }
+            }
+        }
+
+        private static readonly DependencyProperty DigitHookProperty =
+            DependencyProperty.RegisterAttached("DigitHook", typeof(bool), typeof(Loc), new PropertyMetadata(false));
+
+        // هر TextBlock موقع تغییر متن (حتی از بایندینگ یا کد) رقم‌هاش با زبان هماهنگ می‌شه
+        private static void HookDigits(TextBlock tb)
+        {
+            ApplyDigits(tb);
+            if ((bool)tb.GetValue(DigitHookProperty))
+            {
+                return;
+            }
+            tb.SetValue(DigitHookProperty, true);
+            System.ComponentModel.DependencyPropertyDescriptor dpd = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock));
+            EventHandler h = delegate { ApplyDigits(tb); };
+            dpd.AddValueChanged(tb, h);
+            tb.Unloaded += delegate
+            {
+                dpd.RemoveValueChanged(tb, h);
+                tb.ClearValue(DigitHookProperty);
+            };
+        }
+
+        private static void ApplyDigits(TextBlock tb)
+        {
+            try
+            {
+                if (tb.Inlines.Count > 1 || (tb.Inlines.Count == 1 && !(tb.Inlines.FirstInline is Run)))
+                {
+                    foreach (Inline inl in tb.Inlines)
+                    {
+                        Run r = inl as Run;
+                        if (r != null && !BindingOperations.IsDataBound(r, Run.TextProperty))
+                        {
+                            string rn = Digits(r.Text);
+                            if (rn != r.Text) { r.Text = rn; }
+                        }
+                    }
+                    return;
+                }
+                string t = tb.Text;
+                string n = Digits(t);
+                if (n != t)
+                {
+                    tb.SetCurrentValue(TextBlock.TextProperty, n);
+                }
+            }
+            catch
+            {
             }
         }
 

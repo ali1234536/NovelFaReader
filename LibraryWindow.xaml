@@ -134,6 +134,7 @@
                             <TextBlock Text="راهنمای برنامه" TextTrimming="CharacterEllipsis" />
                         </Button>
                     </StackPanel>
+                    <ScrollViewer Name="sidebarScroll" Style="{StaticResource ModernScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
                     <StackPanel>
                         <TextBlock Text="کتاب‌ها" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="8,0,0,8" />
                         <Button Name="btnTabAll" Tag="all" Style="{StaticResource NavButton}" Click="TabButton_Click">
@@ -171,6 +172,13 @@
                                 <Path Style="{StaticResource Ico}" Data="{StaticResource IcoAll}" />
                                 <TextBlock Text="مجموعه‌ها" Margin="12,0,0,0" VerticalAlignment="Center" />
                                 <TextBlock Name="txtCollectionsCount" Text="" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentColor}" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="هوشمند و پیشرفته" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="8,20,0,8" />
+                        <Button Name="btnTabAdvanced" Tag="advanced" Style="{StaticResource NavButton}" Click="TabButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="✦" FontSize="14" Foreground="{DynamicResource AccentColor}" VerticalAlignment="Center" />
+                                <TextBlock Text="بخش پیشرفته" Margin="12,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <TextBlock Text="حریم خصوصی" Foreground="{DynamicResource TextMuted}" FontSize="11" FontWeight="SemiBold" Margin="8,24,0,8" />
@@ -213,6 +221,7 @@
                             </StackPanel>
                         </Button>
                     </StackPanel>
+                    </ScrollViewer>
                 </DockPanel>
             </Grid>
         </Border>
@@ -230,6 +239,14 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Border Grid.Row="0" Background="#00FFFFFF" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <DockPanel>
+                <Border Name="libModeSwitcher" DockPanel.Dock="Left" Margin="20,4,0,4" Padding="2" CornerRadius="9" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Name="btnLibModeStandard" Tag="standard" Content="استاندارد" Padding="9,3" FontSize="10.5" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="LibUiMode_Click" ToolTip="نمای کامل کتابخانه" />
+                        <Button Name="btnLibModeCompact" Tag="compact" Content="فشرده" Padding="9,3" FontSize="10.5" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="LibUiMode_Click" ToolTip="نمای سریع و فشرده بدون بنرهای اضافی" />
+                        <Button Name="btnLibModeSmart" Tag="smart" Content="پیشرفته" Padding="9,3" FontSize="10.5" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="LibUiMode_Click" ToolTip="بخش پیشرفته، اسکرول خودکار و بهینه‌سازی" />
+                    </StackPanel>
+                </Border>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="btnLanguage" Style="{StaticResource TitleBarButton}" Width="64" Height="36" ToolTip="زبان" Click="btnLanguage_Click">
                         <StackPanel Orientation="Horizontal" FlowDirection="LeftToRight">
@@ -250,6 +267,7 @@
                         <Path Style="{StaticResource Ico}" Data="{StaticResource IcoClose}" StrokeThickness="1.2" />
                     </Button>
                 </StackPanel>
+                </DockPanel>
             </Border>
             <DockPanel Grid.Row="1" Margin="36,4,36,12">
                 <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
@@ -579,6 +597,20 @@
                                                     <Line X1="0" X2="600" Y1="5" Y2="5" Stroke="{DynamicResource AccentColor}" StrokeThickness="1.1" Opacity="0.9" />
                                                     <Line X1="0" X2="600" Y1="5" Y2="5" Stroke="{DynamicResource AccentColor}" StrokeThickness="9" StrokeDashArray="0.18 1.15" Opacity="0.9" />
                                                 </Grid>
+                                                <Grid Height="10" Margin="8,-5,8,-5" ClipToBounds="True" Visibility="{DynamicResource ThemeOttoVisibility}" IsHitTestVisible="False">
+                                                    <Line X1="0" X2="600" Y1="5" Y2="5" Stroke="{DynamicResource AccentColor}" StrokeThickness="2" StrokeDashArray="0.1 2.3" StrokeDashCap="Round" Opacity="0.9" />
+                                                    <Path Data="M0,6 L6,0 L12,6 L6,12 Z" Fill="{DynamicResource AccentColor}" Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" />
+                                                </Grid>
+                                                <Grid Height="10" Margin="8,-5,8,-5" ClipToBounds="True" Visibility="{DynamicResource ThemeGtaVisibility}" IsHitTestVisible="False">
+                                                    <Rectangle Height="2.5" VerticalAlignment="Top" Margin="0,1,0,0" Fill="#FF4FA3" />
+                                                    <Rectangle Height="1.8" VerticalAlignment="Center" Margin="0,0,0,0" Fill="#FFB547" />
+                                                    <Rectangle Height="1" VerticalAlignment="Bottom" Margin="0,0,0,1" Fill="#27E0D0" />
+                                                </Grid>
+                                                <Grid Height="10" Margin="8,-5,8,-5" ClipToBounds="True" Visibility="{DynamicResource ThemeJuliusVisibility}" IsHitTestVisible="False">
+                                                    <Line X1="0" X2="600" Y1="5" Y2="5" Stroke="#F4D26B" StrokeThickness="1" Opacity="0.9" />
+                                                    <Line X1="0" X2="600" Y1="8" Y2="8" Stroke="{DynamicResource AccentColor}" StrokeThickness="0.8" Opacity="0.7" />
+                                                    <Path Data="M0,6 L6,0 L12,6 L6,12 Z" Fill="#F4D26B" Width="10" Height="10" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,0,0,0" />
+                                                </Grid>
                                                 <StackPanel Margin="14,12,14,14">
                                                     <TextBlock Foreground="{DynamicResource TextColor}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" Height="36" TextTrimming="CharacterEllipsis" Text="{Binding Title}" />
                                                     <Grid Margin="0,8,0,0">
@@ -593,6 +625,24 @@
                                                     </Grid>
                                                 </StackPanel>
                                             </StackPanel>
+                                            <Grid Visibility="{DynamicResource ThemeOttoVisibility}" IsHitTestVisible="False">
+                                                <Rectangle RadiusX="12" RadiusY="12" Margin="5" Stroke="{DynamicResource AccentColor}" StrokeThickness="2" StrokeDashArray="0.1 2.3" StrokeDashCap="Round" Opacity="0.8" />
+                                                <Rectangle RadiusX="15" RadiusY="15" Stroke="{DynamicResource AccentColor}" StrokeThickness="1" Opacity="0.55" />
+                                                <Path Data="M0,7 L7,0 L14,7 L7,14 Z M3.5,7 L7,3.5 L10.5,7 L7,10.5 Z" Fill="{DynamicResource AccentColor}" Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="9,0,0,9" />
+                                                <Path Data="M0,7 L7,0 L14,7 L7,14 Z M3.5,7 L7,3.5 L10.5,7 L7,10.5 Z" Fill="{DynamicResource AccentColor}" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,9,9" />
+                                            </Grid>
+                                            <Grid Visibility="{DynamicResource ThemeGtaVisibility}" IsHitTestVisible="False">
+                                                <Rectangle RadiusX="15" RadiusY="15" StrokeThickness="2.2" Opacity="0.95"><Rectangle.Stroke><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FF4FA3" Offset="0" /><GradientStop Color="#FFB547" Offset="0.5" /><GradientStop Color="#27E0D0" Offset="1" /></LinearGradientBrush></Rectangle.Stroke></Rectangle>
+                                                <Rectangle RadiusX="11" RadiusY="11" Margin="6" StrokeThickness="0.8" StrokeDashArray="1 3" Stroke="#27E0D0" Opacity="0.8" />
+                                                <Border Width="34" Height="3" CornerRadius="2" Background="#FF4FA3" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12,0,0,12" />
+                                                <Border Width="20" Height="3" CornerRadius="2" Background="#27E0D0" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,12,12" />
+                                            </Grid>
+                                            <Grid Visibility="{DynamicResource ThemeJuliusVisibility}" IsHitTestVisible="False">
+                                                <Path Data="M0,12 L0,0 L12,0 M4,12 L4,4 L12,4" Stroke="#F4D26B" StrokeThickness="1.6" Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="3,3,0,0" Stretch="None" />
+                                                <Path Data="M0,12 L0,0 L12,0 M4,12 L4,4 L12,4" Stroke="#F4D26B" StrokeThickness="1.6" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,3,0" Stretch="None" RenderTransformOrigin="0.5,0.5"><Path.RenderTransform><ScaleTransform ScaleX="-1" /></Path.RenderTransform></Path>
+                                                <Path Data="M0,12 L0,0 L12,0 M4,12 L4,4 L12,4" Stroke="#F4D26B" StrokeThickness="1.6" Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="3,0,0,3" Stretch="None" RenderTransformOrigin="0.5,0.5"><Path.RenderTransform><ScaleTransform ScaleY="-1" /></Path.RenderTransform></Path>
+                                                <Path Data="M0,12 L0,0 L12,0 M4,12 L4,4 L12,4" Stroke="#F4D26B" StrokeThickness="1.6" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,3,3" Stretch="None" RenderTransformOrigin="0.5,0.5"><Path.RenderTransform><ScaleTransform ScaleX="-1" ScaleY="-1" /></Path.RenderTransform></Path>
+                                            </Grid>
                                             <Button Name="MoreBtn" Opacity="0" Style="{StaticResource CardIconButton}" Background="#F2FFFFFF" Foreground="#4C4766" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10" Tag="{Binding}" Click="BtnMore_Click">
                                                 <Path Style="{StaticResource IcoFill}" Data="{StaticResource IcoDots}" />
                                             </Button>
@@ -691,6 +741,163 @@
                 <ListBox Name="collectionList" Grid.Row="4" Background="Transparent" BorderThickness="0" Padding="0,0,8,0" ItemContainerStyle="{StaticResource CollectionItemStyle}" ItemTemplate="{StaticResource CollectionRowTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True" />
                 <TextBlock Name="txtCollectionsEmpty" Grid.Row="4" Text="هنوز مجموعه‌ای نساختی. روی «مجموعه‌ی جدید» بزن." Foreground="{DynamicResource TextMuted}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
+            <ScrollViewer Name="advancedPanel" Grid.Row="2" Style="{StaticResource ModernScrollViewer}" Margin="0,0,8,8" Visibility="Collapsed">
+                <StackPanel Margin="36,8,36,28">
+                    <DockPanel Margin="0,0,0,16">
+                        <Border DockPanel.Dock="Left" Padding="4" CornerRadius="12" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Name="btnAdvTabSmart" Tag="smart" Content="داشبورد هوشمند" Padding="12,7" FontSize="12" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="AdvSubTab_Click" />
+                                <Button Name="btnAdvTabAutoScroll" Tag="autoscroll" Content="اسکرول خودکار" Padding="12,7" FontSize="12" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="AdvSubTab_Click" />
+                                <Button Name="btnAdvTabPerf" Tag="perf" Content="عملکرد و روان‌سازی" Padding="12,7" FontSize="12" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="AdvSubTab_Click" />
+                                <Button Name="btnAdvTabEyeCare" Tag="eyecare" Content="محافظ چشم و هوشمند" Padding="12,7" FontSize="12" Background="#00FFFFFF" BorderThickness="0" Cursor="Hand" Click="AdvSubTab_Click" />
+                            </StackPanel>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Right">
+                            <TextBlock Text="بخش پیشرفته و هوشمند" Foreground="{DynamicResource TextColor}" FontSize="22" FontWeight="Bold" />
+                            <TextBlock Text="کنترل کامل اسکرول خودکار، بهینه‌سازی سرعت و ابزارهای هوشمند مطالعه" Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- زیربخش ۱: داشبورد هوشمند -->
+                    <StackPanel Name="pnlAdvSmart">
+                        <Border CornerRadius="16" Padding="20" Margin="0,0,0,14" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <DockPanel>
+                                <Button Name="btnSmartRecOpen" DockPanel.Dock="Left" Content="ادامه مطالعه" Style="{StaticResource ModernButton}" Padding="18,10" VerticalAlignment="Center" Click="btnSmartRecOpen_Click" />
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="✦ پیشنهاد هوشمند امروز" Foreground="{DynamicResource AccentColor}" FontSize="11.5" FontWeight="SemiBold" />
+                                    <TextBlock Name="txtSmartRecTitle" Text="در حال تحلیل کتابخانه..." Foreground="{DynamicResource TextColor}" FontSize="18" FontWeight="Bold" Margin="0,6,0,4" />
+                                    <TextBlock Name="txtSmartRecReason" Text="" Foreground="{DynamicResource TextMuted}" FontSize="12.5" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Border CornerRadius="16" Padding="20" Margin="0,0,0,14" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock Name="txtSmartGoalSummary" DockPanel.Dock="Left" Text="۰ از ۳۰ دقیقه (۰٪)" Foreground="{DynamicResource AccentColor}" FontSize="12.5" FontWeight="SemiBold" />
+                                    <TextBlock Text="هدف مطالعه‌ی روزانه" Foreground="{DynamicResource TextColor}" FontSize="15" FontWeight="Bold" />
+                                </DockPanel>
+                                <Border Height="8" Width="280" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource BorderColor}" ClipToBounds="True">
+                                    <Border Name="barSmartGoalFill" Height="8" Width="8" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource AccentColor}" />
+                                </Border>
+                                <TextBlock Name="txtSmartStatusSummary" Text="" Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,14,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- زیربخش ۲: اسکرول خودکار سراسری -->
+                    <StackPanel Name="pnlAdvAutoScroll" Visibility="Collapsed">
+                        <Border CornerRadius="16" Padding="20" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="اسکرول خودکار برای تمام فرمت‌ها (EPUB، PDF، کمیک CBZ، DOCX و TXT)" Foreground="{DynamicResource TextColor}" FontSize="15.5" FontWeight="Bold" Margin="0,0,0,6" />
+                                <TextBlock Text="تنظیمات پیش‌فرض اسکرول خودکار را اینجا تعیین کن تا در همه کتاب‌ها آماده باشد." Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,0,0,16" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <Button Name="btnAdvAsStep" Tag="step" Content="حالت زمان‌دار (مثلاً هر ۲ ثانیه)" Padding="14,8" Margin="0,0,8,0" Click="AdvAsMode_Click" />
+                                    <Button Name="btnAdvAsSmooth" Tag="smooth" Content="حالت پیوسته (حرکت نرم مداوم)" Padding="14,8" Click="AdvAsMode_Click" />
+                                </StackPanel>
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvAsIntervalVal" DockPanel.Dock="Left" Text="۲ ثانیه" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="فاصله‌ی زمانی هر اسکرول (ثانیه)" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvAsInterval" Minimum="0.5" Maximum="30" Value="2" TickFrequency="0.5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,10" />
+                                <WrapPanel Margin="0,0,0,16">
+                                    <Button Content="۱ ثانیه" Tag="1" Style="{StaticResource SoftButton}" Padding="10,5" Margin="0,0,6,6" FontSize="11.5" Click="AdvAsPreset_Click" />
+                                    <Button Content="۲ ثانیه" Tag="2" Style="{StaticResource SoftButton}" Padding="10,5" Margin="0,0,6,6" FontSize="11.5" Click="AdvAsPreset_Click" />
+                                    <Button Content="۳ ثانیه" Tag="3" Style="{StaticResource SoftButton}" Padding="10,5" Margin="0,0,6,6" FontSize="11.5" Click="AdvAsPreset_Click" />
+                                    <Button Content="۵ ثانیه" Tag="5" Style="{StaticResource SoftButton}" Padding="10,5" Margin="0,0,6,6" FontSize="11.5" Click="AdvAsPreset_Click" />
+                                    <Button Content="۸ ثانیه" Tag="8" Style="{StaticResource SoftButton}" Padding="10,5" Margin="0,0,6,6" FontSize="11.5" Click="AdvAsPreset_Click" />
+                                    <Button Content="۱۰ ثانیه" Tag="10" Style="{StaticResource SoftButton}" Padding="10,5" Margin="0,0,6,6" FontSize="11.5" Click="AdvAsPreset_Click" />
+                                </WrapPanel>
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvAsStepVal" DockPanel.Dock="Left" Text="۴۵٪ صفحه" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="میزان اسکرول در هر گام زمان‌دار" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvAsStep" Minimum="15" Maximum="100" Value="45" TickFrequency="5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,16" />
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvAsSpeedVal" DockPanel.Dock="Left" Text="۴۵ پیکسل/ثانیه" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="سرعت حالت اسکرول پیوسته (نرم)" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvAsSpeed" Minimum="15" Maximum="220" Value="45" TickFrequency="5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,16" />
+
+                                <CheckBox Name="chkAdvAsAutoNext" Content="عبور خودکار به بخش یا صفحه‌ی بعدی هنگام رسیدن به انتهای صفحه" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,8" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+                                <CheckBox Name="chkAdvAsPause" Content="توقف موقت هوشمند هنگام اسکرول دستی یا کلیک کاربر" Foreground="{DynamicResource TextColor}" FontSize="12.5" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- زیربخش ۳: عملکرد و روان‌سازی -->
+                    <StackPanel Name="pnlAdvPerf" Visibility="Collapsed">
+                        <Border CornerRadius="16" Padding="20" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="پروفایل بهینه‌سازی و روان‌سازی موتور برنامه" Foreground="{DynamicResource TextColor}" FontSize="15.5" FontWeight="Bold" Margin="0,0,0,12" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                    <Button Name="btnAdvPerfAuto" Tag="auto" Content="هوشمند (خودکار)" Padding="14,8" Margin="0,0,8,0" Click="AdvPerfProfile_Click" />
+                                    <Button Name="btnAdvPerfTurbo" Tag="turbo" Content="توربو (حداکثر روانی)" Padding="14,8" Margin="0,0,8,0" Click="AdvPerfProfile_Click" />
+                                    <Button Name="btnAdvPerfRich" Tag="rich" Content="حداکثر جلوه بصری" Padding="14,8" Click="AdvPerfProfile_Click" />
+                                </StackPanel>
+
+                                <CheckBox Name="chkAdvSmoothScroll" Content="اسکرول نرم با شتاب‌دهی سخت‌افزاری (Smooth Easing)" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,10" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+                                <CheckBox Name="chkAdvCardAnim" Content="انیمیشن ورود و حرکت کارت‌های کتابخانه" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,10" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+                                <CheckBox Name="chkAdvLazyImages" Content="بارگذاری تنبل تصاویر (کاهش مصرف رم در کتاب‌های حجیم)" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,10" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+                                <CheckBox Name="chkAdvParticles" Content="جلوه‌ی ذرات پس‌زمینه‌ی تم‌ها" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,18" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Name="btnAdvClearCache" Content="پاکسازی کش و آزادسازی حافظه" Style="{StaticResource ModernButton}" Padding="16,9" Click="btnAdvClearCache_Click" />
+                                    <TextBlock Name="txtAdvCacheStatus" Text="" Foreground="{DynamicResource AccentColor}" FontSize="12" VerticalAlignment="Center" Margin="14,0,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- زیربخش ۴: محافظ چشم و هوشمندسازی -->
+                    <StackPanel Name="pnlAdvEyeCare" Visibility="Collapsed">
+                        <Border CornerRadius="16" Padding="20" Background="{DynamicResource BgCard}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="محافظ چشم و دستیار هوشمند مطالعه" Foreground="{DynamicResource TextColor}" FontSize="15.5" FontWeight="Bold" Margin="0,0,0,14" />
+
+                                <CheckBox Name="chkAdvAutoTheme" Content="تغییر خودکار تم روشن/تیره بر اساس ساعت شبانه‌روز (۷ صبح تا ۷ شب روشن)" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,14" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvEyeCareVal" DockPanel.Dock="Left" Text="۰٪" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="شدت فیلتر نور آبی (محافظ چشم)" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvEyeCare" Minimum="0" Maximum="60" Value="0" TickFrequency="5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,14" />
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvBrightnessVal" DockPanel.Dock="Left" Text="۱۰۰٪" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="روشنایی صفحه‌ی مطالعه" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvBrightness" Minimum="45" Maximum="100" Value="100" TickFrequency="5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,14" />
+
+                                <CheckBox Name="chkAdvRuler" Content="فعال‌سازی پیش‌فرض خط‌کش تمرکز هوشمند در مطالعه" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,10" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+                                <CheckBox Name="chkAdvEyeRest" Content="یادآور هوشمند استراحت چشم (قانون ۲۰-۲۰-۲۰)" Foreground="{DynamicResource TextColor}" FontSize="12.5" Margin="0,0,0,16" Checked="AdvCheck_Changed" Unchecked="AdvCheck_Changed" />
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvDailyGoalVal" DockPanel.Dock="Left" Text="۳۰ دقیقه" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="هدف مطالعه‌ی روزانه" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvDailyGoal" Minimum="5" Maximum="180" Value="30" TickFrequency="5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,14" />
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvPomodoroVal" DockPanel.Dock="Left" Text="۲۵ دقیقه" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="مدت هر جلسه‌ی پومودورو" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvPomodoro" Minimum="5" Maximum="60" Value="25" TickFrequency="5" ValueChanged="AdvSlider_ValueChanged" Margin="0,0,0,14" />
+
+                                <DockPanel Margin="0,0,0,6">
+                                    <TextBlock Name="txtAdvWpmVal" DockPanel.Dock="Left" Text="۲۱۰ کلمه/دقیقه" Foreground="{DynamicResource AccentColor}" FontWeight="SemiBold" />
+                                    <TextBlock Text="سرعت مطالعه‌ی شخصی (برای تخمین دقیق زمان باقی‌مانده)" Foreground="{DynamicResource TextColor}" FontSize="13" />
+                                </DockPanel>
+                                <Slider Name="sldAdvWpm" Minimum="80" Maximum="500" Value="210" TickFrequency="10" ValueChanged="AdvSlider_ValueChanged" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
         <Border Name="dimOverlay" Grid.ColumnSpan="2" Background="#B30F0E17" Visibility="Collapsed" />
         <Grid Name="dropOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" IsHitTestVisible="False">

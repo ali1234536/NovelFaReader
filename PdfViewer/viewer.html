@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -108,7 +108,7 @@ body.th #stage{margin-left:132px;}
 
   var pdf=null,total=0,pageEls=[],baseW=0,baseH=0,userZoom=1,invertOn=(Q.pick==='1'),isDark=Q.dark==='1';
   var queue=[],active=0,curPage=1,fp='x';
-  var dpr=Math.min(2,window.devicePixelRatio||1),MAX_CANVAS=14,layT=null;
+  var dpr=Math.min(2,window.devicePixelRatio||1),MAX_CANVAS=14,layT=null,layoutVer=0;
   var mode='scroll',fitMode='width',rtl=false,rot=0,coverAlone=true;
   var views=[],curView=0;
 
@@ -158,14 +158,31 @@ body.th #stage{margin-left:132px;}
       var ordered=shown.slice();if(mode==='spread'&&rtl)ordered.reverse();
       ordered.forEach(function(n){pagesEl.appendChild(pageEls[n-1]);});
     }else{pageEls.forEach(function(el){el.classList.remove('off');pagesEl.appendChild(el);});}
+    layoutVer++;
     pageEls.forEach(function(el){
       if(mode!=='scroll'&&el.classList.contains('off'))return;
       var s=scaleFor(el),d=pageDims(el);
-      el.style.width=Math.round(d.w*s)+'px';el.style.height=Math.round(d.h*s)+'px';
-      if(el._rendered){el._rendered=false;el._stale=true;}
+      var nw=Math.round(d.w*s)+'px',nh=Math.round(d.h*s)+'px';
+      var changed=(el.style.width!==nw||el.style.height!==nh);
+      el.style.width=nw;el.style.height=nh;
+      // a render in flight was started for the old size: cancel it, it would only be thrown away
+      if(changed&&el._task){try{el._task.cancel();}catch(e){}el._task=null;}
+      if(changed&&el._rendered){el._rendered=false;el._stale=true;}
     });
     zoomv.textContent=Math.round(userZoom*100)+'%';
-    clearTimeout(layT);layT=setTimeout(function(){wantVisible();kick();},mode==='scroll'?140:30);
+    clearTimeout(layT);layT=setTimeout(function(){wantVisible();refreshVisible();kick();},mode==='scroll'?120:30);
+  }
+  // scroll mode: the IntersectionObserver does not fire again when only the size of an already visible page changed
+  // (first paint before the panel/thumbs settled, zoom, resize), so stale pages stayed blurry until scrolled away and back
+  function refreshVisible(){
+    if(mode!=='scroll')return;
+    var H=innerHeight||root.clientHeight||800;
+    for(var i=0;i<pageEls.length;i++){
+      var el=pageEls[i];
+      if(el._rendered&&!el._stale)continue;
+      var r=el.getBoundingClientRect();
+      if(r.bottom>-1000&&r.top<H+1000)enqueue(el);
+    }
   }
 
   /* rendering */
@@ -175,7 +192,7 @@ body.th #stage{margin-left:132px;}
     if(mode!=='scroll')return;
     io=new IntersectionObserver(function(entries){
       entries.forEach(function(en){var el=en.target;if(en.isIntersecting){el._vis=true;enqueue(el);}else{el._vis=false;release(el);}});
-    },{root:null,rootMargin:'1400px 0px 1400px 0px',threshold:0});
+    },{root:null,rootMargin:'1000px 0px 1000px 0px',threshold:0});
     pageEls.forEach(function(el){io.observe(el);});
   }
   function dropCanvas(el){
@@ -215,8 +232,8 @@ body.th #stage{margin-left:132px;}
     try{
       var w=48,h=48,c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');
       x.drawImage(canvas,0,0,w,h);var d=x.getImageData(0,0,w,h).data;var mid=0,n=w*h;
-      for(var i=0;i<d.length;i+=4){var l=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])/255;if(l>0.1&&l<0.88)mid++;}
-      return mid/n>0.30;
+      for(var i=0;i<d.length;i+=4){var l=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])/255;if(l>0.3&&l<0.72)mid++;}
+      return mid/n>0.38;
     }catch(e){return false;}
   }
   function renderPage(el){
@@ -224,10 +241,11 @@ body.th #stage{margin-left:132px;}
     return pdf.getPage(n).then(function(page){
       var v1=page.getViewport({scale:1,rotation:0});
       if(!el._w||Math.abs(el._w-v1.width)>1||Math.abs(el._h-v1.height)>1){el._w=v1.width;el._h=v1.height;}
+      var ver=layoutVer;
       var s=scaleFor(el),d=pageDims(el);
       var cssW=Math.round(d.w*s),cssH=Math.round(d.h*s);
       el.style.width=cssW+'px';el.style.height=cssH+'px';
-      var q=Math.min(dpr,Math.sqrt(16000000/Math.max(1,cssW*cssH)));if(q<1)q=1;
+      var q=Math.min(dpr,Math.sqrt(12000000/Math.max(1,cssW*cssH)));if(q<1)q=1;
       var rotation=(page.rotate+rot)%360;
       var vp=page.getViewport({scale:s*q,rotation:rotation});
       var canvas=document.createElement('canvas');canvas.width=Math.floor(vp.width);canvas.height=Math.floor(vp.height);
@@ -240,7 +258,8 @@ body.th #stage{margin-left:132px;}
         var oldT=el.querySelector('.textLayer');if(oldT)el.removeChild(oldT);
         el.insertBefore(canvas,el.firstChild);
         el.classList.toggle('photo',isPhoto(canvas));
-        el._rendered=true;el._stale=false;
+        el._rendered=true;el._stale=(ver!==layoutVer);
+        if(el._stale){enqueue(el);}
         if(!firstPaint&&Math.abs(n-curPage)<=1){firstPaint=true;tryReveal();}
         evict();drawHighlights(el);
         try{
@@ -292,6 +311,7 @@ body.th #stage{margin-left:132px;}
     curView=v;curPage=viewPages(v)[0];layout();root.scrollTop=0;root.scrollLeft=0;updateIndicators();
   }
   window.__pdfStep=step;
+  window.__smartIsPagedMode=function(){return mode!=='scroll';};
   var lastPosted=-1,lt=-1,lh=-1,lc=-1;
   function currentPageFromScroll(){
     var mid=(window.innerHeight||root.clientHeight)*0.35;
@@ -697,5 +717,15 @@ body.th #stage{margin-left:132px;}
   open();
 })();
 </script>
+<script>(function(){var m=(location.search.match(/[?&]dg=(fa|en)/)||[])[1];if(!m)return;var fa=m==='fa';
+var P='۰۱۲۳۴۵۶۷۸۹';
+function cv(s){if(!s||/:\/\/|:\\/.test(s))return s;
+return s.replace(/[٠-٩۰-۹]/g,function(c){var n=c.charCodeAt(0);n=n>=0x6F0?n-0x6F0:n-0x660;return fa?P.charAt(n):String(n);}).replace(fa?/[A-Za-z0-9_.]*\d[A-Za-z0-9_.]*/g:/$^/,function(a){return /[A-Za-z_]/.test(a)?a:a.replace(/\d/g,function(x){return P.charAt(+x);});}).replace(fa?/$^/:/[٫٬٪]/g,function(c){return c==='٫'?'.':c==='٬'?',':'%';});}
+function skip(n){for(;n;n=n.parentNode){if(n.nodeType===1){var t=n.tagName;if(t==='SCRIPT'||t==='STYLE'||t==='TEXTAREA'||t==='INPUT'||n.id==='doc'||n.id==='pages'||(n.classList&&(n.classList.contains('textLayer')||n.classList.contains('keep'))))return true;}}return false;}
+function fix(n){if(n.nodeType===3){if(!skip(n.parentNode)){var v=cv(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v;}return;}
+if(n.nodeType!==1||skip(n))return;var w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT,null,false),x,a=[];while((x=w.nextNode()))a.push(x);a.forEach(fix);
+if(n.title){var t=cv(n.title);if(t!==n.title)n.title=t;}}
+function run(){fix(document.body);new MutationObserver(function(ms){ms.forEach(function(r){if(r.type==='characterData')fix(r.target);else r.addedNodes.forEach(fix);});}).observe(document.body,{childList:true,subtree:true,characterData:true});}
+if(document.body)run();else document.addEventListener('DOMContentLoaded',run);})();</script>
 </body>
 </html>

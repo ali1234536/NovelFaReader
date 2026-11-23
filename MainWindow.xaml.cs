@@ -260,6 +260,18 @@ namespace EpubReader
                 case "rd.prev":
                     btnPrevChapter_Click(btnPrevChapter, args);
                     break;
+                case "rd.autoScroll":
+                    ToggleAutoScroll();
+                    break;
+                case "rd.focusMode":
+                    ToggleFocusModeShortcut();
+                    break;
+                case "rd.smartHud":
+                    ToggleSmartHudShortcut();
+                    break;
+                case "rd.readingRuler":
+                    btnHudRuler_Click(btnHudRuler, args);
+                    break;
                 case "rd.fontUp":
                     btnFontIncrease_Click(btnFontIncrease, args);
                     break;
@@ -343,6 +355,7 @@ namespace EpubReader
         {
             InitializeComponent();
             Loc.Prepare(this);
+            ApplyFootnoteButton();
             WindowMax.Attach(this, () => isFullScreen);
             StateChanged += (object s, EventArgs e) => ApplySpacingLive();
             PopulateFontList();
@@ -352,17 +365,42 @@ namespace EpubReader
             BuildThemeButtons();
             UpdateDarkModeButton();
             StartSupportReminder();
+            InitSmartReader();
             MouseFx.Changed += OnMouseFxChanged;
+            Closing += (object s, System.ComponentModel.CancelEventArgs e) =>
+            {
+                try
+                {
+                    if (!IsVisible)
+                    {
+                        // پنجره‌ی هنوز-نمایش-داده‌نشده داره بسته می‌شه؛ برای پیدا کردن علتش توی لاگ می‌نویسیم
+                        LibraryService.LogOpen("[Reader] closing while hidden:\n" + Environment.StackTrace);
+                    }
+                }
+                catch
+                {
+                }
+            };
             Closed += (object s, EventArgs e) =>
             {
+                windowClosed = true;
                 MouseFx.Changed -= OnMouseFxChanged;
                 StopScrollWatcher();
                 StopSupportReminder();
+                DisposeSmartReader();
                 CreditXp(xpTracker.Flush());
                 FlushPdfProgress();
                 ShutdownWebView();
                 CleanupCurrentBook();
             };
+        }
+
+        private bool windowClosed;
+
+        // اگه این پنجره بسته شده باشه دیگه نباید برای باز کردن کتاب استفاده بشه
+        public bool IsClosedWindow
+        {
+            get { return windowClosed; }
         }
 
         // نشانگر تم موقع عوض شدن تم یا حالت موس توی صفحه‌ی خواندن هم به‌روز می‌شه
@@ -410,6 +448,7 @@ namespace EpubReader
                 return;
             }
             supportSeconds += 10;
+            TrackSmartReadingTick(10);
             if (supportSeconds >= SupportIntervalSeconds)
             {
                 supportSeconds = 0;
@@ -457,6 +496,10 @@ namespace EpubReader
 
         public bool OpenBook(Book book, EpubBook preloaded = null)
         {
+            if (windowClosed)
+            {
+                return false;
+            }
             try
             {
                 CleanupCurrentBook();
@@ -694,6 +737,7 @@ namespace EpubReader
             btnSpacing.Visibility = vis;
             txtFontSize.Visibility = vis;
             btnContinuousMode.Visibility = vis;
+            btnFootnote.Visibility = vis;
             txtCurrentLabel.Text = Loc.T(pdf ? "صفحه فعلی" : "بخش فعلی");
             txtPrevLabel.Text = Loc.T(pdf ? "صفحه قبلی" : "بخش قبلی");
             txtNextLabel.Text = Loc.T(pdf ? "صفحه بعدی" : "بخش بعدی");
@@ -1237,7 +1281,12 @@ namespace EpubReader
             sb.Append("<style id=\"readerSpacing\">").Append(BuildSpacingCss()).Append("</style>");
             sb.Append("<style id=\"rdrCursor\">").Append(MouseFx.ReaderFxCss).Append("</style>");
             sb.Append("<script>window.__rdrGen=").Append(docGen).Append(";window.__rdrKeys=").Append(BuildShortcutKeyMapJs()).Append(";</script>");
-            sb.Append("<script>window.__fndL={ph:'").Append(CssQuote(Loc.T("جستجو در کتاب…"))).Append("',none:'").Append(CssQuote(Loc.T("پیدا نشد"))).Append("',book:'").Append(CssQuote(Loc.T("کل کتاب:"))).Append("'};</script>");
+            sb.Append("<script>window.__rdrFn=").Append(ReaderFootnote.Enabled ? "true" : "false").Append(";</script>");
+            sb.Append("<script>").Append(ReaderFootnote.PageScript).Append("</script>");
+            sb.Append("<script>").Append(ReaderSelect.LabelsScript()).Append("</script>");
+            sb.Append("<script>").Append(ReaderSelect.PageScript).Append("</script>");
+            sb.Append("<script>window.__fndHist=").Append(SearchHistoryJs()).Append(";</script>");
+            sb.Append("<script>window.__fndL={ph:'").Append(CssQuote(Loc.T("جستجو در کتاب…"))).Append("',none:'").Append(CssQuote(Loc.T("پیدا نشد"))).Append("',book:'").Append(CssQuote(Loc.T("کل کتاب:"))).Append("',hint:'").Append(CssQuote(Loc.T("عبارت رو بنویس تا لیست نتیجه‌ها بیاد"))).Append("'};</script>");
             sb.Append("<script>").Append(ReaderFind.PageScript).Append("</script>");
             sb.Append("<script>(function(){");
             sb.Append("function post(m){try{window.chrome.webview.postMessage(m);}catch(x){}}");
@@ -1258,7 +1307,7 @@ namespace EpubReader
             sb.Append("function r(){try{var d=document.documentElement,b=document.body;var t=Math.round(Math.max(d.scrollTop||0,b.scrollTop||0)),h=Math.max(d.scrollHeight||0,b.scrollHeight||0),c=d.clientHeight||b.clientHeight||0;");
             sb.Append("if(t!=lt||h!=lh||c!=lc){lt=t;lh=h;lc=c;post('s|'+t+'|'+h+'|'+c);}else if(h>c){lr=t/(h-c);}}catch(x){}}");
             sb.Append("function z(){try{if(lr>=0){var d=document.documentElement,b=document.body;var h=Math.max(d.scrollHeight||0,b.scrollHeight||0),c=d.clientHeight||b.clientHeight||0;var nt=Math.round(lr*Math.max(h-c,0));d.scrollTop=nt;b.scrollTop=nt;}}catch(x){}r();}");
-            sb.Append("window.addEventListener('scroll',r);window.addEventListener('resize',z);setInterval(r,500);");
+            sb.Append("var rafR=0;function rs(){if(!rafR){rafR=requestAnimationFrame(function(){rafR=0;r();});}}window.addEventListener('scroll',rs,{passive:true});window.addEventListener('resize',z,{passive:true});setInterval(r,750);");
             sb.Append("})();</script></head><body>").Append(bodyContent).Append("</body></html>");
             return sb.ToString();
         }
@@ -2118,12 +2167,50 @@ namespace EpubReader
             return " dir=\"rtl\" data-rdr=\"r\"";
         }
 
-        private static string StampDirection(Match m)
+        // تشخیص هوشمند جهت پاراگراف با در نظر گرفتن جهت غالب کل فصل و حرف اول جمله
+        // تا عبارات انگلیسی داخل پرانتز در متن فارسی باعث چپ‌چین شدن خط نشوند
+        private static int DetectParagraphDirection(string text, bool chapterIsRtl)
+        {
+            int latin = 0;
+            int rtl = 0;
+            int firstStrong = 0;
+            foreach (char c in text)
+            {
+                if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '\u00C0' && c <= '\u024F' && c != '\u00D7' && c != '\u00F7'))
+                {
+                    latin++;
+                    if (firstStrong == 0) firstStrong = 1;
+                }
+                else if ((c >= '\u0590' && c <= '\u08FF') || (c >= '\uFB1D' && c <= '\uFDFF') || (c >= '\uFE70' && c <= '\uFEFF'))
+                {
+                    rtl++;
+                    if (firstStrong == 0) firstStrong = 2;
+                }
+            }
+            if (latin == 0 && rtl == 0)
+            {
+                return 0;
+            }
+            if (chapterIsRtl)
+            {
+                if (rtl == 0) return 1;
+                if (firstStrong == 2) return 2;
+                return (latin >= rtl * 4) ? 1 : 2;
+            }
+            else
+            {
+                if (latin == 0) return 2;
+                if (firstStrong == 1) return 1;
+                return (rtl >= latin * 4) ? 2 : 1;
+            }
+        }
+
+        private static string StampDirection(Match m, bool chapterIsRtl)
         {
             string tag = m.Groups[1].Value;
             string attrs = m.Groups[2].Value;
             string inner = m.Groups[3].Value;
-            int d = DetectDirection(HtmlToPlainText(inner));
+            int d = DetectParagraphDirection(HtmlToPlainText(inner), chapterIsRtl);
             if (d == 0)
             {
                 return m.Value;
@@ -2134,15 +2221,17 @@ namespace EpubReader
         }
 
         // به هر پاراگراف/تیتر/لیست جهت درست خودش رو می‌ده؛ پس متن انگلیسی چپ‌چین و LTR می‌شه
-        // و متن فارسی راست‌چین می‌مونه، حتی وقتی توی یه کتاب قاطی باشن
+        // و متن فارسی راست‌چین می‌مونه، حتی وقتی عبارت انگلیسی داخل پرانتز داشته باشه
         private static string ApplyTextDirection(string body)
         {
+            bool chapterIsRtl = DetectDirection(HtmlToPlainText(body)) != 1;
+            MatchEvaluator eval = (Match m) => StampDirection(m, chapterIsRtl);
             // اول بلاک‌های داخلی
-            body = Regex.Replace(body, "<(p|h[1-6]|dd|dt|figcaption|caption)\\b([^>]*?)(?<!/)>([\\s\\S]*?)</\\1\\s*>", new MatchEvaluator(StampDirection), RegexOptions.IgnoreCase);
+            body = Regex.Replace(body, "<(p|h[1-6]|dd|dt|figcaption|caption)\\b([^>]*?)(?<!/)>([\\s\\S]*?)</\\1\\s*>", eval, RegexOptions.IgnoreCase);
             // بعد div‌هایی که بلاک دیگه‌ای داخلشون نیست
-            body = Regex.Replace(body, "<(div)\\b([^>]*?)(?<!/)>((?:(?!<div\\b|</div|<p\\b|<h[1-6]\\b|<ul\\b|<ol\\b|<table\\b|<blockquote\\b)[\\s\\S])*?)</div\\s*>", new MatchEvaluator(StampDirection), RegexOptions.IgnoreCase);
+            body = Regex.Replace(body, "<(div)\\b([^>]*?)(?<!/)>((?:(?!<div\\b|</div|<p\\b|<h[1-6]\\b|<ul\\b|<ol\\b|<table\\b|<blockquote\\b)[\\s\\S])*?)</div\\s*>", eval, RegexOptions.IgnoreCase);
             // بعد ظرف‌ها
-            body = Regex.Replace(body, "<(ul|ol|blockquote)\\b([^>]*?)(?<!/)>([\\s\\S]*?)</\\1\\s*>", new MatchEvaluator(StampDirection), RegexOptions.IgnoreCase);
+            body = Regex.Replace(body, "<(ul|ol|blockquote)\\b([^>]*?)(?<!/)>([\\s\\S]*?)</\\1\\s*>", eval, RegexOptions.IgnoreCase);
             return body;
         }
 
@@ -2321,11 +2410,96 @@ namespace EpubReader
             sbTop = top;
             sbHeight = height;
             sbClient = client;
+            UpdateBookPage();
             SchedulePosSave();
             if (!sbDragging)
             {
                 UpdateScrollThumb();
             }
+            if (height > client)
+            {
+                UpdateSmartProgressBar((double)top / Math.Max(1, height - client));
+            }
+        }
+
+        // شماره‌ی صفحه‌ی کل کتاب (EPUB): صفحه‌ی مجازی ~۱۸۰۰ نویسه‌ای از روی طول متن بخش‌ها؛ برای هر قالب غیر-EPUB خود نمایشگرشون شماره‌ی صفحه می‌دن
+        private int[] bookCharCum;          // مجموع تجمعی نویسه‌ها تا پایان هر بخش
+        private string bookCharCumFor;
+        private const int CharsPerBookPage = 1800;
+
+        private void EnsureBookWeights()
+        {
+            if (currentBook == null || pdfSource != null || docKind != null || comicMode)
+            {
+                return;
+            }
+            string key = currentBook.ExtractPath ?? "";
+            if (bookCharCumFor == key && bookCharCum != null)
+            {
+                return;
+            }
+            bookCharCumFor = key;
+            bookCharCum = null;
+            List<string> files = new List<string>();
+            foreach (ChapterItem ch in currentBook.Chapters)
+            {
+                files.Add(ch.FilePath);
+            }
+            Task.Run(() =>
+            {
+                int[] cum = new int[files.Count];
+                long run = 0;
+                Regex tags = new Regex("<[^>]*>", RegexOptions.Compiled);
+                for (int i = 0; i < files.Count; i++)
+                {
+                    try
+                    {
+                        string html = File.ReadAllText(files[i], Encoding.UTF8);
+                        html = Regex.Replace(html, "<(script|style)[^>]*>.*?</\\1>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                        run += tags.Replace(html, "").Trim().Length + 800 * Regex.Matches(html, "<img", RegexOptions.IgnoreCase).Count;
+                    }
+                    catch
+                    {
+                    }
+                    cum[i] = (int)Math.Min(int.MaxValue, run);
+                }
+                return cum;
+            }).ContinueWith(t =>
+            {
+                if (t.IsFaulted || bookCharCumFor != key)
+                {
+                    return;
+                }
+                bookCharCum = t.Result;
+                UpdateBookPage();
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        private void UpdateBookPage()
+        {
+            if (currentBook == null || pdfSource != null || docKind != null || comicMode)
+            {
+                return;
+            }
+            int idx = listBoxChapters.SelectedIndex;
+            int n = listBoxChapters.Items.Count;
+            if (idx < 0 || n == 0)
+            {
+                return;
+            }
+            string chapterText = Loc.F("{0} از {1}", idx + 1, n);
+            EnsureBookWeights();
+            int[] cum = bookCharCum;
+            if (cum == null || cum.Length != n || cum[n - 1] <= 0)
+            {
+                return;
+            }
+            long before = idx > 0 ? cum[idx - 1] : 0;
+            long len = cum[idx] - before;
+            double frac = (sbHeight - sbClient) > 1 ? Math.Max(0.0, Math.Min(1.0, (double)sbTop / (sbHeight - sbClient))) : 0.0;
+            int total = Math.Max(1, (int)Math.Ceiling(cum[n - 1] / (double)CharsPerBookPage));
+            int page = Math.Max(1, Math.Min(total, (int)((before + len * frac) / CharsPerBookPage) + 1));
+            txtChapterPosition.Text = chapterText + "  ·  " + Loc.F("صفحه {0} از {1}", page, total);
         }
 
         private void UpdateScrollThumb()
@@ -2562,6 +2736,32 @@ namespace EpubReader
         private void btnBookSearch_Click(object sender, RoutedEventArgs e)
         {
             OpenBookSearch();
+        }
+
+        private void OnQuoteSaved(string text)
+        {
+            string chapter = pdfSource != null ? "" : (txtChapterTitle.Text ?? "");
+            bool added = QuoteStore.Add(currentLibraryBook.Id, chapter, text);
+            try
+            {
+                txtFontNotice.Text = Loc.T(added ? "نقل‌قول ذخیره شد" : "این نقل‌قول از قبل ذخیره بود");
+                DispatcherTimer tm = new DispatcherTimer();
+                tm.Interval = TimeSpan.FromSeconds(2.5);
+                tm.Tick += (object s, EventArgs e) => { tm.Stop(); txtFontNotice.Text = ""; };
+                tm.Start();
+            }
+            catch
+            {
+            }
+        }
+
+        private void btnQuotes_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentLibraryBook == null)
+            {
+                return;
+            }
+            QuotesWindow.ShowFor(this, currentLibraryBook.Id, currentLibraryBook.Title);
         }
 
         private void btnContinuousMode_Click(object sender, RoutedEventArgs e)
@@ -2835,6 +3035,10 @@ namespace EpubReader
         // (تا عکس‌های داخل کتاب با آدرس فایل درست دیده بشن و محدودیت حجم هم نداشته باشیم)
         private void ShowHtmlPage(string html)
         {
+            if (windowClosed)
+            {
+                return;
+            }
             try
             {
                 if (pdfSource != null)
@@ -3082,6 +3286,7 @@ namespace EpubReader
             {
                 RunPendingFind();
             }
+            OnSmartNavigationCompleted();
             for (int i = stalePageFiles.Count - 1; i >= 0; i--)
             {
                 try
@@ -3145,6 +3350,63 @@ namespace EpubReader
             }
         }
 
+        // پنجره‌ی پاورقی: لینک به فایل دیگه (مثلاً notes.xhtml#fn1) رو پیدا می‌کنه و متنش رو به صفحه می‌فرسته
+        private async void OnFootnoteRequest(string url, int x, int y)
+        {
+            string note = null;
+            try
+            {
+                if (currentBook != null)
+                {
+                    Uri u = new Uri(url);
+                    if (u.IsFile)
+                    {
+                        string target = NormPathKey(u.LocalPath);
+                        string frag = Uri.UnescapeDataString((u.Fragment ?? "").TrimStart('#'));
+                        string path = null;
+                        for (int i = 0; i < currentBook.Chapters.Count; i++)
+                        {
+                            string fp = currentBook.Chapters[i].FilePath;
+                            if (!string.IsNullOrEmpty(fp) && NormPathKey(fp) == target) { path = fp; break; }
+                        }
+                        if (path != null && frag.Length > 0)
+                        {
+                            note = await Task.Run(() =>
+                            {
+                                try { return ReaderFootnote.ExtractNoteHtml(File.ReadAllText(path, Encoding.UTF8), frag); }
+                                catch { return null; }
+                            });
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                note = null;
+            }
+            if (note == null)
+            {
+                OnBookLink(url);
+                return;
+            }
+            string b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(note));
+            await RunScriptAsync("window.__rdrNote&&window.__rdrNote('" + b64 + "'," + x + "," + y + ");");
+        }
+
+        private void btnFootnote_Click(object sender, RoutedEventArgs e)
+        {
+            ReaderFootnote.Enabled = !ReaderFootnote.Enabled;
+            ApplyFootnoteButton();
+            RunScriptAsync("window.__rdrFn=" + (ReaderFootnote.Enabled ? "true" : "false") + ";");
+        }
+
+        private void ApplyFootnoteButton()
+        {
+            bool on = ReaderFootnote.Enabled;
+            btnFootnote.Background = (Brush)FindResource(on ? "AccentColorDark" : "HoverColor");
+            btnFootnote.Foreground = on ? Brushes.White : ((Brush)FindResource("TextMuted"));
+        }
+
         private void GoToChapterAnchor(int idx, string frag)
         {
             if (currentBook == null || pdfSource != null || idx < 0 || idx >= currentBook.Chapters.Count)
@@ -3170,41 +3432,94 @@ namespace EpubReader
         private string findQuery;
         private string pendingFindQ;
         private int pendingFindDir = 1;
-        private readonly Dictionary<int, string> findTextCache = new Dictionary<int, string>();
+        private int pendingFindChap = -1;
+        private int pendingFindK = -1;
+
+        private sealed class FindChapterData
+        {
+            public string Orig;
+            public string Norm;
+            public int[] Map;
+        }
+
+        private readonly Dictionary<int, FindChapterData> findTextCache = new Dictionary<int, FindChapterData>();
         private string findCacheBook;
 
-        private string FindChapterText(int i)
+        private FindChapterData FindChapter(int i)
         {
-            string text;
+            FindChapterData data;
             lock (findTextCache)
             {
-                if (findTextCache.TryGetValue(i, out text)) { return text; }
+                if (findTextCache.TryGetValue(i, out data)) { return data; }
             }
+            data = new FindChapterData();
             try
             {
                 string fp = currentBook.Chapters[i].FilePath;
                 string html = File.ReadAllText(fp, Encoding.UTF8);
-                text = ReaderFind.PlainNorm(html);
+                data.Orig = ReaderFind.PlainText(html);
+                data.Norm = ReaderFind.NormWithMap(data.Orig, out data.Map);
             }
-            catch { text = ""; }
-            lock (findTextCache) { findTextCache[i] = text; }
-            return text;
+            catch
+            {
+                data.Orig = "";
+                data.Norm = "";
+                data.Map = new int[0];
+            }
+            lock (findTextCache) { findTextCache[i] = data; }
+            return data;
         }
 
-        private Task<int[]> ComputeFindHits(string q)
+        private sealed class FindResult
+        {
+            public int[] Hits;
+            public string ListJson;
+        }
+
+        // همه‌ی فصل‌ها رو می‌گرده: تعداد نتیجه‌ی هر فصل + فهرست جمله‌های نتیجه (حداکثر ۳۰۰ تا)
+        private Task<FindResult> ComputeFind(string q)
         {
             EpubBook book = currentBook;
             string nq = ReaderFind.Norm(q);
             return Task.Run(() =>
             {
+                FindResult res = new FindResult();
                 int n = (book != null) ? book.Chapters.Count : 0;
-                int[] hits = new int[n];
-                if (nq.Length == 0) { return hits; }
-                for (int i = 0; i < n; i++)
+                res.Hits = new int[n];
+                StringBuilder list = new StringBuilder("[");
+                int shown = 0;
+                if (nq.Length > 0)
                 {
-                    hits[i] = ReaderFind.Count(FindChapterText(i), nq);
+                    for (int i = 0; i < n; i++)
+                    {
+                        FindChapterData d = FindChapter(i);
+                        int from = 0;
+                        int k = 0;
+                        while (true)
+                        {
+                            int at = d.Norm.IndexOf(nq, from, StringComparison.Ordinal);
+                            if (at < 0 || k >= 5000) { break; }
+                            if (shown < 300 && k < 40 && at < d.Map.Length)
+                            {
+                                string sb1, sm, sa;
+                                ReaderFind.Snippet(d.Orig, d.Map, at, nq.Length, out sb1, out sm, out sa);
+                                if (shown > 0) { list.Append(','); }
+                                list.Append("{\"c\":").Append(i).Append(",\"k\":").Append(k)
+                                    .Append(",\"t\":").Append(ReaderFind.JsStr(book.Chapters[i].Title))
+                                    .Append(",\"a\":").Append(ReaderFind.JsStr(sb1))
+                                    .Append(",\"m\":").Append(ReaderFind.JsStr(sm))
+                                    .Append(",\"b\":").Append(ReaderFind.JsStr(sa)).Append('}');
+                                shown++;
+                            }
+                            k++;
+                            from = at + Math.Max(1, nq.Length);
+                        }
+                        res.Hits[i] = k;
+                    }
                 }
-                return hits;
+                list.Append(']');
+                res.ListJson = list.ToString();
+                return res;
             });
         }
 
@@ -3218,12 +3533,65 @@ namespace EpubReader
                 findCacheBook = key;
             }
             findQuery = q;
-            int[] hits = await ComputeFindHits(q);
+            FindResult res = await ComputeFind(q);
             if (findQuery != q) { return; }
-            findHits = hits;
+            findHits = res.Hits;
             int total = 0;
-            foreach (int h in hits) { total += h; }
-            await RunScriptAsync("window.__fndBook&&window.__fndBook(" + total + ");");
+            foreach (int h in res.Hits) { total += h; }
+            await RunScriptAsync("window.__fndBook&&window.__fndBook(" + total + ");window.__fndList&&window.__fndList(" + res.ListJson + ");");
+        }
+
+        // ذخیره‌ی تاریخچه‌ی جستجو (جدیدترین اول، حداکثر ۱۲ مورد)
+        private void RememberSearch(string q)
+        {
+            q = (q ?? "").Trim();
+            if (q.Length < 2) { return; }
+            List<string> all = SearchHistory();
+            all.RemoveAll(x => string.Equals(x, q, StringComparison.Ordinal));
+            all.Insert(0, q);
+            if (all.Count > 12) { all.RemoveRange(12, all.Count - 12); }
+            AppSettings.Set("SearchHistory", string.Join("\n", all.ToArray()));
+        }
+
+        private static List<string> SearchHistory()
+        {
+            List<string> all = new List<string>();
+            foreach (string line in AppSettings.Get("SearchHistory", "").Split('\n'))
+            {
+                string t = line.Trim();
+                if (t.Length > 0) { all.Add(t); }
+            }
+            return all;
+        }
+
+        private static string SearchHistoryJs()
+        {
+            StringBuilder sb = new StringBuilder("[");
+            List<string> all = SearchHistory();
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (i > 0) { sb.Append(','); }
+                sb.Append(ReaderFind.JsStr(all[i]));
+            }
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        // کلیک روی یک نتیجه‌ی فهرست: برو به همون فصل و همون نتیجه
+        private void OnFindGoto(int chap, int k, string q)
+        {
+            if (currentBook == null || chap < 0 || chap >= currentBook.Chapters.Count) { return; }
+            RememberSearch(q);
+            if (chap >= contFirst && chap <= contLast && chap == listBoxChapters.SelectedIndex)
+            {
+                RunScriptAsync("window.__fndGoto&&window.__fndGoto('" + CssQuote(q) + "'," + chap + "," + k + ");");
+                return;
+            }
+            pendingFindQ = q;
+            pendingFindChap = chap;
+            pendingFindK = k;
+            if (listBoxChapters.SelectedIndex == chap) { listBoxChapters.SelectedIndex = -1; }
+            listBoxChapters.SelectedIndex = chap;
         }
 
         // رسیدن به آخر/اول نتیجه‌های صفحه: برو سراغ فصل بعدی/قبلی که نتیجه داره
@@ -3233,7 +3601,8 @@ namespace EpubReader
             if (findHits == null || findQuery != q)
             {
                 findQuery = q;
-                findHits = await ComputeFindHits(q);
+                FindResult res = await ComputeFind(q);
+                findHits = res.Hits;
             }
             int[] hits = findHits;
             int n = hits.Length;
@@ -3251,6 +3620,8 @@ namespace EpubReader
             if (target < 0) { return; }
             pendingFindQ = q;
             pendingFindDir = dir;
+            pendingFindChap = -1;
+            pendingFindK = -1;
             if (listBoxChapters.SelectedIndex == target)
             {
                 listBoxChapters.SelectedIndex = -1;
@@ -3262,10 +3633,21 @@ namespace EpubReader
         {
             string q = pendingFindQ;
             int dir = pendingFindDir;
+            int chap = pendingFindChap;
+            int k = pendingFindK;
             pendingFindQ = null;
+            pendingFindChap = -1;
+            pendingFindK = -1;
             if (q == null) { return; }
             await Task.Delay(180);
-            await RunScriptAsync("window.__fndReopen&&window.__fndReopen('" + CssQuote(q) + "'," + dir + ");");
+            if (chap >= 0 && k >= 0)
+            {
+                await RunScriptAsync("window.__fndGoto&&window.__fndGoto('" + CssQuote(q) + "'," + chap + "," + k + ");");
+            }
+            else
+            {
+                await RunScriptAsync("window.__fndReopen&&window.__fndReopen('" + CssQuote(q) + "'," + dir + ");");
+            }
             if (findHits != null)
             {
                 int total = 0;
@@ -3316,6 +3698,10 @@ namespace EpubReader
                         OnScrollInfo(a, b, c);
                     }
                     break;
+                case "as_end":
+                case "as_interact":
+                    HandleSmartWebMessage(p[0]);
+                    break;
                 case "k":
                     if (p.Length == 2 && int.TryParse(p[1], out a))
                     {
@@ -3334,6 +3720,27 @@ namespace EpubReader
                         AppSettings.Set("PdfLook." + currentLibraryBook.Id, p[1] == "1" ? "1" : "0");
                     }
                     break;
+                case "qt":
+                    if (p.Length == 2 && currentLibraryBook != null)
+                    {
+                        OnQuoteSaved(Uri.UnescapeDataString(p[1]));
+                    }
+                    break;
+                case "tr":
+                    if (p.Length == 2)
+                    {
+                        ReaderSelect.Translate(Uri.UnescapeDataString(p[1]));
+                    }
+                    break;
+                case "fp":
+                    if (p.Length == 4 && pdfSource == null)
+                    {
+                        int fx, fy;
+                        int.TryParse(p[2], out fx);
+                        int.TryParse(p[3], out fy);
+                        OnFootnoteRequest(Uri.UnescapeDataString(p[1]), fx, fy);
+                    }
+                    break;
                 case "fq":
                     if (p.Length == 2 && pdfSource == null)
                     {
@@ -3344,6 +3751,22 @@ namespace EpubReader
                     if (p.Length == 3 && pdfSource == null && int.TryParse(p[1], out a))
                     {
                         OnFindNext(a, Uri.UnescapeDataString(p[2]));
+                    }
+                    break;
+                case "fh":
+                    if (p.Length == 2)
+                    {
+                        RememberSearch(Uri.UnescapeDataString(p[1]));
+                    }
+                    break;
+                case "fg":
+                    if (p.Length == 4 && pdfSource == null)
+                    {
+                        int gc, gk;
+                        if (int.TryParse(p[1], out gc) && int.TryParse(p[2], out gk))
+                        {
+                            OnFindGoto(gc, gk, Uri.UnescapeDataString(p[3]));
+                        }
                     }
                     break;
                 case "fx":

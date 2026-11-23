@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -54,6 +54,17 @@ body.docx #doc table{font-size:.9em;}
 #msg{transition:opacity .28s;}.gone{opacity:0;pointer-events:none;}
 .spin{width:30px;height:30px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:sp .9s linear infinite;}
 @keyframes sp{to{transform:rotate(360deg);}}
+#bml{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);width:min(340px,92vw);max-height:50vh;overflow:auto;display:none;border-radius:14px;padding:6px;font-size:13px;z-index:6;direction:ltr;}
+#bml.open{display:block;}
+#bml .it{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:9px;cursor:pointer;}
+#bml .it:hover{background:rgba(255,255,255,.1);}
+#bml .it b{flex:none;min-width:34px;color:var(--accent);}
+#bml .it span{flex:1;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:auto;}
+#bml .it i{flex:none;font-style:normal;opacity:.6;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;}
+#bml .it i:hover{background:rgba(255,255,255,.18);opacity:1;}
+#bml .em{padding:12px;text-align:center;opacity:.7;}
+#bmflag{position:fixed;top:0;right:18px;width:18px;height:30px;background:var(--accent);clip-path:polygon(0 0,100% 0,100% 100%,50% 76%,0 100%);z-index:8;display:none;}
+#bmflag.on{display:block;}
 ::selection{background:rgba(217,168,91,.45);}
 </style>
 </head>
@@ -62,6 +73,8 @@ body.docx #doc table{font-size:.9em;}
 <div id="msg"><div class="spin"></div></div>
 <div id="wrap"><article id="doc"></article></div>
 <div id="sb" class="pill" dir="ltr"><input id="sq" type="text" spellcheck="false"><span id="scount"></span><button id="sprev">&#8593;</button><button id="snext">&#8595;</button><button id="sclose">&#10005;</button></div>
+<div id="bmflag"></div>
+<div id="bml" class="pill"></div>
 <div id="bar" class="pill" dir="ltr">
   <button id="fout" class="tx">A-</button><span id="zoomv">100%</span><button id="fin" class="tx">A+</button>
   <span class="sep"></span>
@@ -71,8 +84,47 @@ body.docx #doc table{font-size:.9em;}
   <span class="sep"></span>
   <input id="cur" type="text" inputmode="numeric" value="1"><span id="tot">/ 1</span>
   <span class="sep"></span>
+  <button id="bbm"><svg viewBox="0 0 24 24"><path d="M7 3h10v18l-5-4-5 4z"/></svg></button>
   <button id="find"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></button>
 </div>
+<script>(function(){var q={};try{q=JSON.parse(decodeURIComponent((location.search.match(/[?&]tl=([^&]*)/)||[0,"%7B%7D"])[1].replace(/\+/g," ")));}catch(e){}window.__selL={c:q.cp||"Copy",q:q.qt||"Quote",t:q.tr||"Translate"};})();</script>
+<script>(function(){
+if(window.__selUI){return;}window.__selUI=1;
+function post(m){try{window.chrome.webview.postMessage(m);}catch(x){}}
+var L=window.__selL||{q:'Quote',t:'Translate',c:'Copy'};
+var bar=null,tm=null;
+function hide(){if(bar&&bar.parentNode){bar.parentNode.removeChild(bar);}bar=null;}
+function txt(){var s=window.getSelection();return s?String(s.toString()).replace(/\s+/g,' ').trim():'';}
+function mk(label,fn){
+  var b=document.createElement('button');b.type='button';b.textContent=label;
+  b.style.cssText='background:transparent;border:0;color:#f2f2f2;font:600 13px Segoe UI,Tahoma,sans-serif;padding:7px 12px;border-radius:8px;cursor:pointer;';
+  b.onmouseenter=function(){b.style.background='rgba(255,255,255,.16)';};b.onmouseleave=function(){b.style.background='transparent';};
+  b.onmousedown=function(e){e.preventDefault();e.stopPropagation();};
+  b.onclick=function(e){e.preventDefault();e.stopPropagation();fn();};
+  return b;
+}
+function show(){
+  var s=window.getSelection();if(!s||s.rangeCount===0||s.isCollapsed){hide();return;}
+  var t=txt();if(t.length<2){hide();return;}
+  var r=s.getRangeAt(0).getBoundingClientRect();if(!r||(!r.width&&!r.height)){hide();return;}
+  hide();
+  bar=document.createElement('div');bar.id='selbar';bar.setAttribute('dir','ltr');
+  bar.style.cssText='position:fixed;z-index:2147482500;display:flex;gap:2px;padding:4px;border-radius:12px;background:rgba(30,30,32,.96);border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 28px rgba(0,0,0,.5);visibility:hidden;left:0;top:0;';
+  bar.appendChild(mk(L.c,function(){try{navigator.clipboard.writeText(t);}catch(e){document.execCommand('copy');}hide();}));
+  bar.appendChild(mk(L.q,function(){post('qt|'+encodeURIComponent(t.slice(0,2000)));hide();try{window.getSelection().removeAllRanges();}catch(e){}}));
+  bar.appendChild(mk(L.t,function(){post('tr|'+encodeURIComponent(t.slice(0,1500)));hide();}));
+  document.body.appendChild(bar);
+  var w=bar.offsetWidth,h=bar.offsetHeight,x=r.left+r.width/2-w/2,y=r.top-h-8;
+  if(y<6){y=r.bottom+8;}
+  x=Math.max(6,Math.min(innerWidth-w-6,x));y=Math.max(6,Math.min(innerHeight-h-6,y));
+  bar.style.left=x+'px';bar.style.top=y+'px';bar.style.visibility='visible';
+}
+document.addEventListener('mouseup',function(e){if(bar&&bar.contains(e.target)){return;}clearTimeout(tm);tm=setTimeout(show,60);},true);
+document.addEventListener('keyup',function(e){if(e.shiftKey){clearTimeout(tm);tm=setTimeout(show,120);}},true);
+document.addEventListener('mousedown',function(e){if(bar&&!bar.contains(e.target)){hide();}},true);
+window.addEventListener('scroll',function(){hide();},{passive:true,capture:true});
+window.__selSetL=function(l){L=l;};
+})();</script>
 <script>(function(){
 if(window.__fnd){return;}
 var BLK={P:1,DIV:1,LI:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,TD:1,TH:1,TR:1,BLOCKQUOTE:1,PRE:1,SECTION:1,ARTICLE:1,BR:1,UL:1,OL:1,TABLE:1,BODY:1,FIGURE:1,FIGCAPTION:1};
@@ -184,7 +236,7 @@ window.__fnd={run:run,step:step,clear:clear,info:info,norm:norm};
   var kind=Q.kind||'txt';body.classList.add(kind);
   var TL={};try{TL=JSON.parse(Q.tl||'{}');}catch(e){}
   function t(k,d){return TL[k]||d;}
-  var tips={fout:t('zout','Smaller text'),fin:t('zin','Larger text'),bwid:t('width','Column width'),blh:t('lh','Line spacing'),bff:t('ff','Serif / sans'),find:t('find','Search (Ctrl+F)'),sclose:'Esc'};
+  var tips={fout:t('zout','Smaller text'),fin:t('zin','Larger text'),bwid:t('width','Column width'),blh:t('lh','Line spacing'),bff:t('ff','Serif / sans'),find:t('find','Search (Ctrl+F)'),bbm:t('bm','Bookmarks (B: add / list: right-click)'),sclose:'Esc'};
   Object.keys(tips).forEach(function(k){$(k).title=tips[k];});
   $('sq').placeholder=t('search','Search');
   function store(k,v){try{if(v===undefined){return localStorage.getItem(k);}localStorage.setItem(k,v);}catch(e){return null;}}
@@ -224,10 +276,12 @@ window.__fnd={run:run,step:step,clear:clear,info:info,norm:norm};
   window.__pdfGoto=function(n){moved=true;goto(n,false);};
   function step(dir){moved=true;root.scrollTo({top:curTop()+dir*(innerHeight||root.clientHeight)*0.88,behavior:'smooth'});}
   window.__pdfStep=step;
+  window.__smartIsPagedMode=function(){return false;};
   window.__pdfSearch=function(){openSearch();};
   var lastPosted=-1,lt=-1,lh=-1,lc=-1,curPage=1;
   function updateIndicators(){
     if(document.activeElement!==cur)cur.value=curPage;
+    paintBm();
     var maxS=Math.max(1,docH()-(root.clientHeight||innerHeight));
     prog.style.width=Math.min(100,100*curTop()/maxS)+'%';
     if(curPage!==lastPosted){lastPosted=curPage;post('pp|'+curPage+'|'+total);}
@@ -250,6 +304,43 @@ window.__fnd={run:run,step:step,clear:clear,info:info,norm:norm};
   $('bwid').onclick=function(){keepAnchor(function(){wid=(wid+1)%3;store('docWid',String(wid));applyStyle();});};
   $('blh').onclick=function(){keepAnchor(function(){lhI=(lhI+1)%3;store('docLh',String(lhI));applyStyle();});};
   $('bff').onclick=function(){keepAnchor(function(){serif=!serif;store('docSerif',serif?'1':'0');applyStyle();});};
+
+  /* bookmarks (per book, virtual page + text snippet) */
+  var bkey='docbm:'+(Q.id||('n'+(D.c||[]).length)),bms=[],bml=$('bml'),bflag=$('bmflag');
+  try{bms=JSON.parse(store(bkey)||'[]');}catch(e){bms=[];}if(!Array.isArray(bms))bms=[];
+  function saveBms(){bms.sort(function(a,b){return a.p-b.p;});store(bkey,JSON.stringify(bms));}
+  function bmIdx(p){for(var i=0;i<bms.length;i++){if(bms[i].p===p)return i;}return -1;}
+  function snippetNow(){
+    try{var el=document.elementFromPoint(Math.floor(innerWidth/2),Math.min(140,innerHeight/3));
+      var s=(el&&el.textContent||'').replace(/\s+/g,' ').trim();return s.slice(0,70);}catch(e){return '';}
+  }
+  function paintBm(){
+    var on=bmIdx(curPage)>=0;$('bbm').className=on?'on':'';bflag.className=on?'on':'';
+  }
+  function renderBml(){
+    var h='';
+    if(!bms.length){h='<div class="em">'+t('bmnone','No bookmarks yet')+'</div>';}
+    for(var i=0;i<bms.length;i++){h+='<div class="it" data-p="'+bms[i].p+'"><b>'+bms[i].p+'</b><span></span><i data-d="'+bms[i].p+'">&#10005;</i></div>';}
+    bml.innerHTML=h;
+    var its=bml.querySelectorAll('.it');
+    for(var j=0;j<its.length;j++){its[j].querySelector('span').textContent=bms[j].s||'';}
+  }
+  function toggleBm(){
+    var i=bmIdx(curPage);
+    if(i>=0){bms.splice(i,1);}else{bms.push({p:curPage,s:snippetNow()});}
+    saveBms();paintBm();if(bml.classList.contains('open'))renderBml();
+  }
+  function toggleBml(){var o=bml.classList.toggle('open');if(o)renderBml();}
+  $('bbm').onclick=toggleBm;
+  $('bbm').oncontextmenu=function(e){e.preventDefault();toggleBml();};
+  $('bbm').addEventListener('dblclick',function(e){e.preventDefault();});
+  bml.addEventListener('click',function(e){
+    var d=e.target.getAttribute&&e.target.getAttribute('data-d');
+    if(d){var k=bmIdx(parseInt(d,10));if(k>=0){bms.splice(k,1);saveBms();renderBml();paintBm();}return;}
+    var it=e.target.closest?e.target.closest('.it'):null;
+    if(it){moved=true;goto(parseInt(it.getAttribute('data-p'),10),false);bml.classList.remove('open');}
+  });
+  window.addEventListener('mousedown',function(e){if(bml.classList.contains('open')&&!bml.contains(e.target)&&e.target!==$('bbm')&&!$('bbm').contains(e.target))bml.classList.remove('open');},true);
 
   /* search (native find: selects + scrolls to each hit) */
   var sb=$('sb'),sq=$('sq'),scount=$('scount'),lastQ='';
@@ -282,6 +373,7 @@ window.__fnd={run:run,step:step,clear:clear,info:info,norm:norm};
     var cc=e.ctrlKey?1:0,ss=e.shiftKey?1:0,aa=e.altKey?1:0;
     moved=true;
     if(cc&&k===70){e.preventDefault();openSearch();return;}
+    if(!cc&&!aa&&k===66){e.preventDefault();if(ss){toggleBml();}else{toggleBm();}return;}
     if(cc&&k===67){return;}
     if(cc&&(k===187||k===107)){e.preventDefault();setFs(fs+0.1);return;}
     if(cc&&(k===189||k===109)){e.preventDefault();setFs(fs-0.1);return;}
@@ -346,5 +438,15 @@ function hideMsg(d){setTimeout(function(){msg.classList.add('gone');setTimeout(f
   start();
 })();
 </script>
+<script>(function(){var m=(location.search.match(/[?&]dg=(fa|en)/)||[])[1];if(!m)return;var fa=m==='fa';
+var P='۰۱۲۳۴۵۶۷۸۹';
+function cv(s){if(!s||/:\/\/|:\\/.test(s))return s;
+return s.replace(/[٠-٩۰-۹]/g,function(c){var n=c.charCodeAt(0);n=n>=0x6F0?n-0x6F0:n-0x660;return fa?P.charAt(n):String(n);}).replace(fa?/[A-Za-z0-9_.]*\d[A-Za-z0-9_.]*/g:/$^/,function(a){return /[A-Za-z_]/.test(a)?a:a.replace(/\d/g,function(x){return P.charAt(+x);});}).replace(fa?/$^/:/[٫٬٪]/g,function(c){return c==='٫'?'.':c==='٬'?',':'%';});}
+function skip(n){for(;n;n=n.parentNode){if(n.nodeType===1){var t=n.tagName;if(t==='SCRIPT'||t==='STYLE'||t==='TEXTAREA'||t==='INPUT'||n.id==='doc'||n.id==='pages'||(n.classList&&(n.classList.contains('textLayer')||n.classList.contains('keep'))))return true;}}return false;}
+function fix(n){if(n.nodeType===3){if(!skip(n.parentNode)){var v=cv(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v;}return;}
+if(n.nodeType!==1||skip(n))return;var w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT,null,false),x,a=[];while((x=w.nextNode()))a.push(x);a.forEach(fix);
+if(n.title){var t=cv(n.title);if(t!==n.title)n.title=t;}}
+function run(){fix(document.body);new MutationObserver(function(ms){ms.forEach(function(r){if(r.type==='characterData')fix(r.target);else r.addedNodes.forEach(fix);});}).observe(document.body,{childList:true,subtree:true,characterData:true});}
+if(document.body)run();else document.addEventListener('DOMContentLoaded',run);})();</script>
 </body>
 </html>

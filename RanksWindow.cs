@@ -64,11 +64,11 @@ public sealed class RanksWindow : Window
 		StackPanel header = new StackPanel();
 		DockPanel.SetDock(header, Dock.Top);
 		header.Children.Add(MakeText(Loc.T("رنک‌ها"), 16.0, FontWeights.Bold, "TextColor", new Thickness(0.0, 0.0, 0.0, 6.0)));
-		header.Children.Add(MakeText(now.DisplayName, 13.0, FontWeights.SemiBold, "AccentColor", new Thickness(0.0, 0.0, 0.0, 2.0)));
+		header.Children.Add(MakeText(now.Icon + " " + now.DisplayName, 13.0, FontWeights.SemiBold, "AccentColor", new Thickness(0.0, 0.0, 0.0, 2.0)));
 		string sub = Loc.F("{0} XP", xp);
 		if (now.XpToNext > 0)
 		{
-			sub += " · " + Loc.F("{0} XP تا مرحله‌ی بعد", now.XpToNext);
+			sub += " · " + Loc.F("{0} از {1} XP تا مرحله‌ی بعد", now.XpIntoStep, now.XpStepTotal);
 		}
 		header.Children.Add(MakeText(sub, 11.5, FontWeights.Normal, "TextMuted", new Thickness(0.0, 0.0, 0.0, 8.0)));
 		ProgressBar bar = new ProgressBar();
@@ -104,7 +104,7 @@ public sealed class RanksWindow : Window
 		list.Children.Add(MakeText(Loc.F("بعد از {0} XP، به ازای هر {1} XP یک نشانه‌ی ابدیت می‌گیری.", XpRank.CapXp, XpRank.MarkStepXp), 11.5, FontWeights.Normal, "TextMuted", new Thickness(0.0, 0.0, 0.0, 6.0)));
 		for (int i = 1; i <= XpRank.EternityMarkNames.Length; i++)
 		{
-			string line = "✦" + i + "  " + XpRank.EternityMarkName(i);
+			string line = XpRank.EternityIcon(i) + " ✦" + i + "  " + XpRank.EternityMarkName(i);
 			bool reached = now.EternityMarks >= i;
 			list.Children.Add(MakeText(line, 12.0, reached ? FontWeights.SemiBold : FontWeights.Normal, reached ? "AccentColor" : "TextMuted", new Thickness(4.0, 1.0, 0.0, 1.0)));
 		}
@@ -148,7 +148,7 @@ public sealed class RanksWindow : Window
 		DockPanel.SetDock(xpText, Dock.Right);
 		top.Children.Add(xpText);
 		string mark = reached ? (current ? "▶ " : "✓ ") : "🔒 ";
-		top.Children.Add(MakeText(mark + t.Name, 13.0, current ? FontWeights.Bold : FontWeights.SemiBold, reached ? "TextColor" : "TextMuted", new Thickness(0.0)));
+		top.Children.Add(MakeText(mark + t.Icon + " " + t.Name, 13.0, current ? FontWeights.Bold : FontWeights.SemiBold, reached ? "TextColor" : "TextMuted", new Thickness(0.0)));
 		sp.Children.Add(top);
 
 		List<string> themes = new List<string>();

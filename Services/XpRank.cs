@@ -23,6 +23,9 @@ namespace EpubReader.Services
         }
 
         public string Name { get { return Loc.T(name); } }
+
+        // آیکن رتبه (ایموجی؛ در همه‌ی ویندوزها با Segoe UI Emoji نمایش داده می‌شه)
+        public string Icon { get { return XpRank.IconFor(Index); } }
     }
 
     // یک سطح خوانا: عنوان + ستاره (۱ تا ۵)، یا بعد از سقف، نشانه‌های ابدیت
@@ -34,8 +37,13 @@ namespace EpubReader.Services
         public int EternityMarks;
         public int XpToNext;
         public double Progress;
+        public int XpIntoStep;   // XP جمع‌شده داخل مرحله‌ی فعلی
+        public int XpStepTotal;  // کل XP لازم برای همین مرحله
 
         public int TitleIndex { get { return Title.Index; } }
+
+        // آیکن رتبه؛ بعد از سقف آیکن نشانه‌ی ابدیتِ فعلی
+        public string Icon { get { return EternityMarks >= 1 ? XpRank.EternityIcon(EternityMarks) : Title.Icon; } }
 
         // عنوان + ستاره‌ها (یا نشانه‌ی ابدیت)
         public string DisplayName
@@ -90,6 +98,30 @@ namespace EpubReader.Services
             "تاج کهکشانی", "بالِ نگهبان کتاب", "قلب پلایادس", "تخت ابدیت", "خورشید ابدیتِ جهان‌ها"
         };
 
+        private static readonly string[] TitleIcons = new string[]
+        {
+            "\U0001F331", "\U0001F6B6", "\U0001F4D6", "\U0001F41B", "\U0001F3F9", "\U0001F4DA",
+            "\U0001F30A", "\U0001F5DD", "\U0001F3DB", "\U0001F52E", "\U0001F441", "\U0001F30C"
+        };
+
+        private static readonly string[] EternityMarkIcons = new string[]
+        {
+            "\U0001F525", "\U0001F4A7", "\U0001F342", "\U0001F319", "\u2600",
+            "\U0001F451", "\U0001FAB6", "\u2764", "\U0001FA91", "\U0001F31F"
+        };
+
+        public static string IconFor(int titleIndex)
+        {
+            if (titleIndex < 0) { titleIndex = 0; }
+            return TitleIcons[Math.Min(titleIndex, TitleIcons.Length - 1)];
+        }
+
+        public static string EternityIcon(int count)
+        {
+            if (count < 1) { return ""; }
+            return EternityMarkIcons[Math.Min(count, EternityMarkIcons.Length) - 1];
+        }
+
         public static string EternityMarkName(int count)
         {
             if (count < 1)
@@ -126,6 +158,8 @@ namespace EpubReader.Services
                 lv.Stars = Math.Min(5, 1 + (int)(fraction * 5.0));
                 lv.EternityMarks = 0;
                 lv.XpToNext = nextMin - xp;
+                lv.XpIntoStep = xp - title.MinXp;
+                lv.XpStepTotal = span;
                 lv.Progress = Math.Max(0.0, Math.Min(1.0, fraction));
                 return lv;
             }
@@ -134,6 +168,8 @@ namespace EpubReader.Services
             lv.Stars = 5;
             lv.EternityMarks = over / MarkStepXp;
             lv.XpToNext = MarkStepXp - (over % MarkStepXp);
+            lv.XpIntoStep = over % MarkStepXp;
+            lv.XpStepTotal = MarkStepXp;
             lv.Progress = (double)(over % MarkStepXp) / MarkStepXp;
             return lv;
         }
@@ -224,6 +260,9 @@ namespace EpubReader.Services
                 case "ram": return 2;
                 case "rem": return 3;
                 case "beatrice": return 5;
+                case "otto": return 4;
+                case "julius": return 7;
+                case "gta": return 6;
                 case "emilia": return 8;
                 case "echidna": return 9;
                 case "tsugi": return 10;
@@ -416,6 +455,95 @@ namespace EpubReader.Services
                     bonusAwarded.Add(kv.Key);
                 }
             }
+        }
+
+        // سقف منطقی XP یک بخش (حدود ۴۰۰٬۰۰۰ کلمه)؛ ورودیِ بکاپ که از این بیشتر ادعا کنه کوتاه می‌شه
+        private const int MaxXpPerUnit = 200;
+
+        private static int ClampBookXp(BookLedger b)
+        {
+            int units = (b.UpTo >= 0 ? b.UpTo + 1 : 0) + b.Extras.Count;
+            long cap = (long)Math.Max(1, units) * MaxXpPerUnit;
+            return (int)Math.Min(b.BookXp, cap);
+        }
+
+        // ضد تقلب: فقط ورودی‌های کتاب‌هایی که واقعاً روی این دستگاهن (کلید محتوایی توی allowedKeys) ادغام می‌شن.
+        // بقیه حذف نمی‌شن؛ توی pendingOut جمع می‌شن تا وقتی کتابشون اضافه شد اعمال بشن. تعداد ورودی‌های معلق رو برمی‌گردونه
+        public int MergeContentAnchored(XpLedger other, ISet<string> allowedKeys, XpLedger pendingOut)
+        {
+            int pending = 0;
+            foreach (KeyValuePair<string, BookLedger> kv in other.books)
+            {
+                if (!IsContentKey(kv.Key))
+                {
+                    continue;
+                }
+                BookLedger src = new BookLedger();
+                src.UpTo = kv.Value.UpTo;
+                foreach (int x in kv.Value.Extras)
+                {
+                    src.Extras.Add(x);
+                }
+                src.BookXp = ClampBookXp(kv.Value);
+                bool bonus = other.bonusAwarded.Contains(kv.Key);
+                XpLedger dest = (allowedKeys != null && allowedKeys.Contains(kv.Key)) ? this : pendingOut;
+                if (dest == null)
+                {
+                    continue;
+                }
+                if (dest != this)
+                {
+                    pending++;
+                }
+                BookLedger target;
+                if (!dest.books.TryGetValue(kv.Key, out target))
+                {
+                    target = new BookLedger();
+                    dest.books[kv.Key] = target;
+                }
+                MergeEntryInto(target, src);
+                if (bonus)
+                {
+                    dest.bonusAwarded.Add(kv.Key);
+                }
+            }
+            return pending;
+        }
+
+        public bool IsEmpty { get { return books.Count == 0; } }
+
+        // ادغام کامل (همه‌ی کلیدها): بیشینه‌ی هر دو طرف؛ برای بازیابی از نسخه‌ی پشتیبان خود برنامه
+        public void MergeAll(XpLedger other)
+        {
+            foreach (KeyValuePair<string, BookLedger> kv in other.books)
+            {
+                BookLedger target;
+                if (!books.TryGetValue(kv.Key, out target))
+                {
+                    target = new BookLedger();
+                    books[kv.Key] = target;
+                }
+                MergeEntryInto(target, kv.Value);
+                if (other.bonusAwarded.Contains(kv.Key))
+                {
+                    bonusAwarded.Add(kv.Key);
+                }
+            }
+        }
+
+        // XPِ قابل‌استنتاج فقط از همین دفترچه: جمع XP بخش‌ها + جایزه‌ی پایان هر کتابی که جایزه گرفته (جایزه از XP فعلی کتاب حساب می‌شه)
+        public int DerivedTotal()
+        {
+            long total = 0;
+            foreach (KeyValuePair<string, BookLedger> kv in books)
+            {
+                total += kv.Value.BookXp;
+                if (bonusAwarded.Contains(kv.Key))
+                {
+                    total += XpRank.BookBonus(kv.Value.BookXp);
+                }
+            }
+            return (int)Math.Min(int.MaxValue, total);
         }
 
         // فقط ورودی‌های محتوایی (قابل‌حمل) برای بکاپ
@@ -632,6 +760,67 @@ namespace EpubReader.Services
             }
         }
 
+        private const string PendingKey = "XpPendingLedger";
+
+        // بکاپ: ورودی‌های کتاب‌های موجود ادغام می‌شن، بقیه معلق می‌مونن (از دست نمی‌رن). تعداد معلق رو برمی‌گردونه
+        public static int MergeBackupLedger(string serialized, ISet<string> libraryKeys)
+        {
+            if (string.IsNullOrWhiteSpace(serialized))
+            {
+                return 0;
+            }
+            lock (LedgerLock)
+            {
+                XpLedger led = Ledger;
+                XpLedger pend = XpLedger.Parse(AppSettings.Get(PendingKey, ""));
+                int added = led.MergeContentAnchored(XpLedger.Parse(serialized), libraryKeys, pend);
+                Ledger = led;
+                AppSettings.Set(PendingKey, pend.Serialize());
+                return added;
+            }
+        }
+
+        public static bool HasPending
+        {
+            get { return AppSettings.Get(PendingKey, "").Length > 0; }
+        }
+
+        // کتابی که بعد از بازیابی اضافه شد: ورودی معلقش اعمال می‌شه. XP کل بالا می‌ره (هیچ‌وقت پایین نمیاد)
+        public static int ClaimPending(ISet<string> libraryKeys)
+        {
+            lock (LedgerLock)
+            {
+                string raw = AppSettings.Get(PendingKey, "");
+                if (raw.Length == 0)
+                {
+                    return 0;
+                }
+                XpLedger pend = XpLedger.Parse(raw);
+                XpLedger led = Ledger;
+                int before = led.DerivedTotal();
+                XpLedger tmpPending = new XpLedger();
+                led.MergeContentAnchored(pend, libraryKeys, tmpPending);
+                Ledger = led;
+                AppSettings.Set(PendingKey, tmpPending.IsEmpty ? "" : tmpPending.Serialize());
+                RaiseTotalToLedger();
+                return Math.Max(0, led.DerivedTotal() - before);
+            }
+        }
+
+        // XP کل = بیشینه‌ی (XP فعلی، XP قابل‌استنتاج از دفترچه). عدد بکاپ هرگز مستقیم قبول نمی‌شه
+        public static int RaiseTotalToLedger()
+        {
+            lock (LedgerLock)
+            {
+                int derived = Ledger.DerivedTotal();
+                if (derived > TotalXp)
+                {
+                    TotalXp = derived;
+                }
+                return TotalXp;
+            }
+        }
+
         public static string ContentLedgerSerialized()
         {
             lock (LedgerLock)
@@ -640,10 +829,65 @@ namespace EpubReader.Services
             }
         }
 
+        // XP کل هیچ‌وقت کمتر از بیشینه‌ای که ثبت شده نمی‌شه (XpGuard): اگه appsettings.txt خراب یا برگردونده بشه هم XP برمی‌گرده
         public static int TotalXp
         {
-            get { return ReadInt(TotalKey); }
-            set { AppSettings.Set(TotalKey, Math.Max(0, value).ToString(CultureInfo.InvariantCulture)); }
+            get { return Math.Max(ReadInt(TotalKey), XpGuard.Peak); }
+            set
+            {
+                int v = Math.Max(0, value);
+                int stored = ReadInt(TotalKey);
+                if (v < stored || stored < XpGuard.Peak)
+                {
+                    XpGuard.Log("TotalXp write=" + v + " stored=" + stored + " peak=" + XpGuard.Peak);
+                }
+                AppSettings.Set(TotalKey, Math.Max(v, XpGuard.Peak).ToString(CultureInfo.InvariantCulture));
+                XpGuard.NoteTotal(v);
+            }
+        }
+
+        // موقع شروع برنامه: XP و دفترچه رو از نگهبان بازیابی می‌کنه اگه appsettings.txt چیزی کم داشته باشه
+        public static void SelfHeal()
+        {
+            try
+            {
+                lock (LedgerLock)
+                {
+                    int stored = ReadInt(TotalKey);
+                    string backup = XpGuard.LedgerBackup;
+                    XpLedger led = Ledger;
+                    if (!string.IsNullOrEmpty(backup))
+                    {
+                        XpLedger b = XpLedger.Parse(backup);
+                        int before = led.DerivedTotal();
+                        led.MergeAll(b);
+                        if (led.DerivedTotal() > before)
+                        {
+                            XpGuard.Log("ledger healed from backup: " + before + " -> " + led.DerivedTotal());
+                            Ledger = led;
+                        }
+                    }
+                    int total = TotalXp;
+                    int derived = Ledger.DerivedTotal();
+                    if (derived > total)
+                    {
+                        total = derived;
+                    }
+                    if (total != stored)
+                    {
+                        XpGuard.Log("TotalXp healed: stored=" + stored + " -> " + total);
+                        TotalXp = total;
+                    }
+                    else
+                    {
+                        XpGuard.NoteTotal(total);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                XpGuard.Log("SelfHeal failed: " + ex.Message);
+            }
         }
 
         public static int CelebratedXp
@@ -661,7 +905,12 @@ namespace EpubReader.Services
         public static XpLedger Ledger
         {
             get { return XpLedger.Parse(AppSettings.Get(LedgerKey, "")); }
-            set { AppSettings.Set(LedgerKey, value.Serialize()); }
+            set
+            {
+                string s = value.Serialize();
+                AppSettings.Set(LedgerKey, s);
+                XpGuard.NoteLedger(s);
+            }
         }
 
         private static int ReadInt(string key)

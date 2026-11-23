@@ -105,7 +105,9 @@ namespace EpubReader.Services
                 return false;
             }
             int need = XpRank.XpTitleFor(theme);
-            return need < 99 && XpRank.LevelFor(XpStore.TotalXp).TitleIndex >= need;
+            // عنوانی که یه بار بهش رسیدی (XpGuard.MaxTitle) هیچ‌وقت پس گرفته نمی‌شه، حتی اگه XP ذخیره‌شده خراب بشه
+            int have = Math.Max(XpRank.LevelFor(XpStore.TotalXp).TitleIndex, XpGuard.MaxTitle);
+            return need < 99 && have >= need;
         }
 
         // فقط با رتبه باز شده (نه با راز مخفی)

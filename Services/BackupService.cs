@@ -31,7 +31,8 @@ public sealed class BackupRestoreResult
 	public int BooksUpdated;        // پیشرفتشون روی کتاب‌های موجود اعمال شد
 	public int BooksPending;        // کتابشون هنوز توی کتابخونه نیست؛ با اضافه شدن اعمال می‌شه
 	public int XpBefore;            // XP کل قبل از بازیابی
-	public int XpAfter;             // XP کل بعد از بازیابی (بیشینه‌ی دو طرف)
+	public int XpAfter;             // XP کل بعد از بازیابی (از دفترچه‌ی کتاب‌های موجود)
+	public int LedgerPending;       // ورودی‌های XPِ کتاب‌هایی که هنوز توی کتابخونه نیستن (با اضافه شدن اعمال می‌شن)
 }
 
 // بکاپ و بازیابی ناول‌فا (نسخه‌ی ویندوز): رنک، آواتار، اسم پروفایل، فونت‌های شخصی و رکورد کتاب‌های تمام‌شده.
@@ -305,20 +306,18 @@ public static class BackupService
 
 	// ---------- اعمال (روی نخ رابط کاربری) ----------
 	// ترتیب: فونت ← آواتار ← پروفایل/رنک. libraryFinished = شمارش خام کتاب‌های تمام‌شده‌ی کتابخونه‌ی فعلی
-	public static BackupRestoreResult Apply(BackupData data, int libraryFinished)
+	public static BackupRestoreResult Apply(BackupData data, int libraryFinished, ISet<string> libraryKeys)
 	{
 		BackupRestoreResult r = new BackupRestoreResult();
 
-		// قانون جمع (الحاقیه‌ی نسخه ۳): تعداد کتاب‌های بکاپ روی رکورد فعلی اضافه می‌شه
+		// ضد تقلب: عددهای رنک، تعداد کتاب و XP داخل بکاپ هیچ‌وقت مستقیم قبول نمی‌شن (بکاپ دست‌ساز با رنک ۶ و ۳۷٬۰۰۰ XP قبلاً تمیز بازیابی می‌شد).
+		// رنک از کتاب‌های تمام‌شده‌ی واقعیِ همین دستگاه (بعد از ادغام رکوردها) و XP از دفترچه‌ی کتاب‌های موجود حساب می‌شه.
+		// چیزی گم نمی‌شه: رنک و XP پایین نمیان، و ورودی کتاب‌هایی که هنوز اینجا نیستن معلق می‌مونن و با اضافه شدن کتابشون خودکار اعمال می‌شن
 		long before = Math.Min(BackupFormat.MaxFinishedBooks, (long)RankService.Effective(libraryFinished));
-		long total = Math.Min(BackupFormat.MaxFinishedBooks, before + data.FinishedBooks);
 		int rankBefore = Math.Max(RankService.MaxRankReached, RankService.RankIndexFor((int)before));
-		int rankAfter = Math.Max(rankBefore, Math.Max(data.MaxRank, RankService.RankIndexFor((int)total)));
 		r.BeforeCount = (int)before;
 		r.BackupCount = data.FinishedBooks;
-		r.Total = (int)total;
 		r.RankBefore = rankBefore;
-		r.RankAfter = rankAfter;
 
 		ApplyFonts(data, r);
 
@@ -334,19 +333,35 @@ public static class BackupService
 		{
 		}
 
-		// XP: فقط بیشینه‌ی دو طرف (جمع نمی‌شه، چون همون کتاب‌ها ممکنه روی دو دستگاه حساب شده باشن)
+		// XP: دفترچه‌ی بکاپ فقط برای کتاب‌های موجود ادغام می‌شه (بقیه معلق)؛ XP کل از دفترچه‌ی ادغام‌شده بالا می‌ره، هیچ‌وقت پایین نمیاد
 		r.XpBefore = XpStore.TotalXp;
 		r.XpAfter = r.XpBefore;
-		if (data.TotalXp > r.XpBefore)
+		if (!string.IsNullOrEmpty(data.XpLedger))
 		{
-			XpStore.TotalXp = data.TotalXp;
-			r.XpAfter = data.TotalXp;
+			r.LedgerPending = XpStore.MergeBackupLedger(data.XpLedger, libraryKeys);
+			r.XpAfter = XpStore.RaiseTotalToLedger();
 		}
-		// ledger قابل‌حمل: واحدهایی که روی دستگاه دیگه حساب شدن اینجا هم حساب‌شده می‌مونن و دوباره XP نمی‌دن (XP کل از ledger جمع نمی‌شه)
-		if (data.TotalXp >= 0 && !string.IsNullOrEmpty(data.XpLedger))
+
+		// تعداد تمام‌شده‌ها بعد از ادغام رکوردها (رکورد بازیابی‌شده‌ی کتاب موجود حساب می‌شه)
+		int finishedNow = 0;
+		try
 		{
-			XpStore.MergeContentLedger(data.XpLedger);
+			foreach (Book b in LibraryService.LoadBooks())
+			{
+				if (!b.IsPrivate && b.IsCompleted)
+				{
+					finishedNow++;
+				}
+			}
 		}
+		catch
+		{
+			finishedNow = libraryFinished;
+		}
+		long total = Math.Min(BackupFormat.MaxFinishedBooks, (long)RankService.Effective(finishedNow));
+		int rankAfter = Math.Max(rankBefore, RankService.RankIndexFor((int)total));
+		r.Total = (int)total;
+		r.RankAfter = rankAfter;
 
 		r.AvatarPresent = data.Avatar != null;
 		if (data.Avatar != null)
@@ -374,7 +389,7 @@ public static class BackupService
 		r.SecretsAdded = RankService.MergeSecretThemes(data.SecretThemes);
 
 		// رکورد و رنک هیچ‌وقت کم نمی‌شن: rankAfter >= رنک ذخیره‌شده‌ی فعلی
-		RankService.FinishedFloor = (int)total;
+		RankService.FinishedFloor = Math.Max(RankService.FinishedFloor, finishedNow);
 		if (rankAfter > RankService.MaxRankReached)
 		{
 			RankService.MaxRankReached = rankAfter;
@@ -615,6 +630,11 @@ public static class BackupService
 			{
 				sb.Append(Loc.ListSeparator).Append(Loc.FN("{0} کتاب هنوز توی کتابخونه نیست؛ با اضافه شدن خودکار اعمال می‌شه", r.BooksPending, r.BooksPending));
 			}
+		}
+
+		if (r.LedgerPending > 0)
+		{
+			sb.Append('\n').Append(Loc.FN("XP {0} کتاب بعد از اضافه شدن خودشون به کتابخونه حساب می‌شه", r.LedgerPending, r.LedgerPending));
 		}
 
 		if (r.AvatarPresent)

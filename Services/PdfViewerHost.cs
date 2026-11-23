@@ -334,6 +334,11 @@ public static class PdfViewerHost
 			+ ",\"find\":" + JsonStr(Loc.T("جستجو (Ctrl+F)"))
 			+ ",\"search\":" + JsonStr(Loc.T("جستجو…"))
 			+ ",\"none\":" + JsonStr(Loc.T("پیدا نشد"))
+			+ ",\"bm\":" + JsonStr(Loc.T("نشانک (B) · لیست: کلیک راست / Shift+B"))
+			+ ",\"cp\":" + JsonStr(Loc.T("کپی"))
+			+ ",\"qt\":" + JsonStr(Loc.T("نقل‌قول"))
+			+ ",\"tr\":" + JsonStr(Loc.T("ترجمه"))
+			+ ",\"bmnone\":" + JsonStr(Loc.T("هنوز نشانکی نداری"))
 			+ ",\"min\":" + JsonStr(Loc.T("دقیقه")) + "}";
 		return "https://" + ViewerHost + "/doc.html?kind=" + Uri.EscapeDataString(kind)
 			+ "&base=" + Uri.EscapeDataString("https://" + ComicHost + "/")
@@ -345,6 +350,7 @@ public static class PdfViewerHost
 			+ "&page=" + Math.Max(1, page)
 			+ (zoom > 0.3 ? "&zoom=" + zoom.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")
 			+ "&terr=" + Uri.EscapeDataString(Loc.T("این فایل متن قابل‌خوندن نداره."))
+			+ "&dg=" + (Loc.IsEnglish ? "en" : "fa")
 			+ "&tl=" + Uri.EscapeDataString(tl);
 	}
 
@@ -398,6 +404,30 @@ public static class PdfViewerHost
 			+ ",\"rtl\":" + JsonStr(Loc.T("راست‌به‌چپ (مانگا)"))
 			+ ",\"gap\":" + JsonStr(Loc.T("فاصله‌ی بین صفحه‌ها"))
 			+ ",\"bm\":" + JsonStr(Loc.T("نشانک (B)"))
+			+ ",\"vs_title\":" + JsonStr(Loc.T("تنظیمات نمایش"))
+			+ ",\"vs_bg\":" + JsonStr(Loc.T("پس‌زمینه"))
+			+ ",\"bg_theme\":" + JsonStr(Loc.T("تم برنامه"))
+			+ ",\"bg_dark\":" + JsonStr(Loc.T("خاکستری تیره"))
+			+ ",\"bg_black\":" + JsonStr(Loc.T("مشکی"))
+			+ ",\"bg_white\":" + JsonStr(Loc.T("سفید"))
+			+ ",\"vs_img\":" + JsonStr(Loc.T("تصویر"))
+			+ ",\"vs_sharpen\":" + JsonStr(Loc.T("تیزکردن تصویر"))
+			+ ",\"vs_gray\":" + JsonStr(Loc.T("سیاه‌وسفید"))
+			+ ",\"vs_contrast\":" + JsonStr(Loc.T("کنتراست"))
+			+ ",\"vs_invert\":" + JsonStr(Loc.T("نگاتیو"))
+			+ ",\"vs_sharpen_d\":" + JsonStr(Loc.T("خط‌ها و جزئیات تیزتر و واضح‌تر می‌شن."))
+			+ ",\"vs_crop\":" + JsonStr(Loc.T("برش"))
+			+ ",\"crop_none\":" + JsonStr(Loc.T("خاموش"))
+			+ ",\"crop_auto\":" + JsonStr(Loc.T("حذف حاشیه"))
+			+ ",\"crop_manual\":" + JsonStr(Loc.T("برش دستی"))
+			+ ",\"pad_h\":" + JsonStr(Loc.T("حاشیه‌ی نگه‌داشته‌شده، افقی"))
+			+ ",\"pad_v\":" + JsonStr(Loc.T("حاشیه‌ی نگه‌داشته‌شده، عمودی"))
+			+ ",\"crop_set\":" + JsonStr(Loc.T("تعیین ناحیه‌ی برش…"))
+			+ ",\"crop_excl\":" + JsonStr(Loc.T("حذف حاشیه و برش دستی با هم روشن نمی‌شن."))
+			+ ",\"crop_hint\":" + JsonStr(Loc.T("گوشه رو بکش تا اندازه عوض بشه، داخلش رو بکش تا جابه‌جا بشه"))
+			+ ",\"crop_reset\":" + JsonStr(Loc.T("بازنشانی"))
+			+ ",\"crop_cancel\":" + JsonStr(Loc.T("لغو"))
+			+ ",\"crop_apply\":" + JsonStr(Loc.T("اعمال"))
 			+ ",\"m_scroll\":" + JsonStr(Loc.T("پیوسته"))
 			+ ",\"m_single\":" + JsonStr(Loc.T("تک‌صفحه"))
 			+ ",\"m_spread\":" + JsonStr(Loc.T("دوصفحه")) + "}";
@@ -410,6 +440,7 @@ public static class PdfViewerHost
 			+ "&page=" + Math.Max(1, page)
 			+ (zoom > 0.3 ? "&zoom=" + zoom.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : "")
 			+ "&terr=" + Uri.EscapeDataString(Loc.T("صفحه‌ای پیدا نشد"))
+			+ "&dg=" + (Loc.IsEnglish ? "en" : "fa")
 			+ "&tl=" + Uri.EscapeDataString(tl);
 	}
 
@@ -417,6 +448,7 @@ public static class PdfViewerHost
 	{
 		string docUrl = "https://" + DocHost + "/" + Uri.EscapeDataString(Path.GetFileName(pdfPath));
 		return "https://" + ViewerHost + "/viewer.html?file=" + Uri.EscapeDataString(docUrl)
+			+ "&dg=" + (Loc.IsEnglish ? "en" : "fa")
 			+ "&bg=" + Uri.EscapeDataString(bg ?? "#1c1c1e")
 			+ "&fg=" + Uri.EscapeDataString(fg ?? "#e8e8e8")
 			+ "&dark=" + (dark ? "1" : "0")

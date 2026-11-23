@@ -114,6 +114,9 @@
     <Compile Include="CollectionWindow.xaml.cs">
       <DependentUpon>CollectionWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="LibraryWindow.Smart.cs">
+      <DependentUpon>LibraryWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LibraryWindow.xaml.cs">
       <DependentUpon>LibraryWindow.xaml</DependentUpon>
     </Compile>
@@ -131,7 +134,13 @@
       <DependentUpon>PinWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\AppSettings.cs" />
+    <Compile Include="Services\SmartEngine.cs" />
     <Compile Include="Services\ReaderFind.cs" />
+    <Compile Include="Services\ReaderFootnote.cs" />
+    <Compile Include="Services\ReaderSelect.cs" />
+    <Compile Include="Services\XpGuard.cs" />
+    <Compile Include="Services\Convert\NestedZip.cs" />
+    <Compile Include="QuotesWindow.cs" />
     <Compile Include="Services\CharacterThemes.cs" />
     <Compile Include="Services\Loc.cs" />
     <Compile Include="Services\LocStrings.cs" />
@@ -186,6 +195,9 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainWindow.Smart.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
